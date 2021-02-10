@@ -1,0 +1,44 @@
+# Donk Project
+# Copyright (c) 2021 Warriorstar Orion <orion@snowfrost.garden>
+# SPDX-License-Identifier: MIT
+workspace(name = "donk_transpiler")
+
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "io_bazel_rules_go",
+    sha256 = "207fad3e6689135c5d8713e5a17ba9d1290238f47b9ba545b63d9303406209c6",
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v0.24.7/rules_go-v0.24.7.tar.gz",
+        "https://github.com/bazelbuild/rules_go/releases/download/v0.24.7/rules_go-v0.24.7.tar.gz",
+    ],
+)
+
+load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
+
+go_rules_dependencies()
+go_register_toolchains()
+
+http_archive(
+    name = "com_google_protobuf",
+    sha256 = "bf0e5070b4b99240183b29df78155eee335885e53a8af8683964579c214ad301",
+    strip_prefix = "protobuf-3.14.0",
+    urls = ["https://github.com/protocolbuffers/protobuf/archive/v3.14.0.zip"],
+)
+
+load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+
+protobuf_deps()
+
+http_archive(
+  name = "spacemandmm",
+  strip_prefix = "SpacemanDMM-pb2",
+  urls = ["https://github.com/warriorstar-orion/SpacemanDMM/archive/pb2.tar.gz"],
+)
+
+http_archive(
+  name = "vasker",
+  sha256 = "9e721c5964aace6839d23263b009a40dee1ef070b59a3515e555e4ee289fcb10",
+  strip_prefix = "vasker-9764515fe269331524eafa1aca65d881e9a5aef5",
+  urls = ["https://github.com/warriorstar-orion/vasker/archive/9764515fe269331524eafa1aca65d881e9a5aef5.tar.gz"],
+)

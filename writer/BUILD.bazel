@@ -1,0 +1,29 @@
+# Donk Project
+# Copyright (c) 2021 Warriorstar Orion <orion@snowfrost.garden>
+# SPDX-License-Identifier: MIT
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+package(default_visibility = ["@donk_transpiler//:pkg"])
+
+go_library(
+    name = "writer",
+    srcs = [
+        "declaration.go",
+        "expression.go",
+        "helpers.go",
+        "member.go",
+        "registrar.go",
+        "statement.go",
+        "writer.go",
+    ],
+    importpath = "snowfrost.garden/donk/transpiler/writer",
+    deps = [
+        "@com_github_golang_protobuf//proto:go_default_library",
+        "@donk_transpiler//:ast_go_proto",
+        "@donk_transpiler//:global",
+        "@donk_transpiler//:paths",
+        "@donk_transpiler//parser",
+        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+        "@vasker//:cc_grammar_go_proto",
+    ],
+)

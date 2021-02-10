@@ -1,0 +1,68 @@
+# Donk Project
+# Copyright (c) 2021 Warriorstar Orion <orion@snowfrost.garden>
+# SPDX-License-Identifier: MIT
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+
+package_group(
+    name = "pkg",
+    packages = [
+        "//...",
+    ],
+)
+
+package(default_visibility = [":pkg"])
+
+go_library(
+    name = "global",
+    srcs = ["global.go"],
+    importpath = "snowfrost.garden/donk/transpiler/global",
+)
+
+go_library(
+    name = "paths",
+    srcs = ["paths.go"],
+    importpath = "snowfrost.garden/donk/transpiler/paths",
+    deps = [
+        ":ast_go_proto",
+    ],
+)
+
+go_binary(
+    name = "main",
+    srcs = ["main.go"],
+    data = ["core.binarypb"] + glob(["templates/*.tmpl"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":ast_go_proto",
+        "@com_github_golang_protobuf//proto:go_default_library",
+        "@donk_transpiler//:paths",
+        "@donk_transpiler//parser",
+        "@donk_transpiler//transformer",
+        "@donk_transpiler//writer",
+    ],
+)
+
+go_binary(
+    name = "coregen",
+    srcs = ["coregen.go"],
+    data = ["core.binarypb"] + glob(["templates/*.tmpl"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":ast_go_proto",
+        "@com_github_golang_protobuf//proto:go_default_library",
+        "@donk_transpiler//:paths",
+        "@donk_transpiler//parser",
+        "@donk_transpiler//transformer",
+        "@donk_transpiler//writer",
+        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+    ],
+)
+
+go_proto_library(
+    name = "ast_go_proto",
+    importpath = "snowfrost.garden/donk/proto/ast",
+    protos = [
+        "@spacemandmm//src/dreammaker/protos:ast_proto",
+    ],
+)

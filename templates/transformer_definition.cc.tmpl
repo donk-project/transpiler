@@ -1,0 +1,24 @@
+{{/*
+Donk Project
+Copyright (c) 2021 Warriorstar Orion
+SPDX-License-Identifier: MIT
+*/}}
+
+// Template:    transformer_definition_cc.tmpl
+// Filename:    {{.GetFileMetadata.GetFilename}}
+#include {{.GetBaseInclude}}
+
+{{range $hdr := .GetPreamble.GetHeaders -}}
+#include {{$hdr}}
+{{end -}}
+
+{{range $ns_defn := .GetNamespacedDefinitions }}
+namespace {{$ns_defn.GetNamespace}} {
+{{range $fd := $ns_defn.GetFunctionDefinitions}}
+{{printCppType $fd.GetDeclaration.GetReturnType}} {{$fd.GetDeclaration.GetName}}({{joinArgs $fd.GetDeclaration.Arguments}}) {
+{{range $stmt := $fd.GetBlockDefinition.GetStatements}}  {{printStatement $stmt}};
+{{end -}}
+}
+{{end}} 
+}  // namespace {{$ns_defn.GetNamespace}}
+{{- end}}

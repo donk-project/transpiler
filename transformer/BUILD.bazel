@@ -1,0 +1,34 @@
+# Donk Project
+# Copyright (c) 2021 Warriorstar Orion <orion@snowfrost.garden>
+# SPDX-License-Identifier: MIT
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+package(default_visibility = ["@donk_transpiler//:pkg"])
+
+go_library(
+    name = "transformer",
+    srcs = [
+        "coregen.go",
+        "declaration_file.go",
+        "definition_file.go",
+        "expression.go",
+        "helpers.go",
+        "op_conversions.go",
+        "predicates.go",
+        "prefab.go",
+        "registrar.go",
+        "scope.go",
+        "statement.go",
+        "term.go",
+        "transformer.go",
+    ],
+    importpath = "snowfrost.garden/donk/transpiler/transformer",
+    deps = [
+        "@com_github_golang_protobuf//proto:go_default_library",
+        "@donk_transpiler//:ast_go_proto",
+        "@donk_transpiler//:paths",
+        "@donk_transpiler//parser",
+        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+        "@vasker//:cc_grammar_go_proto",
+    ],
+)
