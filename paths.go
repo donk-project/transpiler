@@ -34,6 +34,14 @@ func NewFromTreePath(tp *astpb.TreePath) *Path {
 	return New("/" + strings.Join(s, "/"))
 }
 
+func NewFromTypePaths(tps []*astpb.TypePath) *Path {
+	var s []string
+	for _, tp := range tps {
+		s = append(s, tp.GetS())
+	}
+	return New("/" + strings.Join(s, "/"))
+}
+
 func New(s string) *Path {
 	if s == "" {
 		panic("Empty path")
@@ -68,6 +76,10 @@ func JoinIntoPath(c []string) *Path {
 
 func (p Path) IsRoot() bool {
 	return p.Name == "/"
+}
+
+func (p Path) Equals(s string) bool {
+	return p.Name == s
 }
 
 func (p Path) FullyQualifiedString() string {

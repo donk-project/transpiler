@@ -68,6 +68,16 @@ var ACCESS_SPECIFIERS = map[cctpb.AccessSpecifier]string{
 	cctpb.AccessSpecifier_PROTECTED: "protected",
 }
 
+var VIRT_SPECIFIERS = map[cctpb.VirtSpecifier_Keyword]string{
+	cctpb.VirtSpecifier_OVERRIDE: "override",
+	cctpb.VirtSpecifier_FINAL: "final",
+
+	// I don't know if there's a difference between these two and at this
+	// point I'm too afraid to ask
+	cctpb.VirtSpecifier_OVERRIDE_FINAL: "override final",
+	cctpb.VirtSpecifier_FINAL_OVERRIDE: "final override",
+}
+
 func (w Writer) printCppType(t *cctpb.CppType) string {
 	switch t.GetPType() {
 	case cctpb.CppType_NONE:
@@ -99,8 +109,12 @@ func (w Writer) printFuncArg(fa *cctpb.FunctionArgument) string {
 func printBaseSpecifiers(bss []*cctpb.BaseSpecifier) string {
 	var specifiers []string
 	for _, bs := range bss {
-		specifiers = append(specifiers, fmt.Sprintf("%v %v",
-			ACCESS_SPECIFIERS[bs.GetAccessSpecifier()],
+		v := ""
+		if bs.GetVirtual() {
+			v = "virtual "
+		}
+		specifiers = append(specifiers, fmt.Sprintf("%v %v%v",
+			ACCESS_SPECIFIERS[bs.GetAccessSpecifier()], v,
 			printIdentifier(bs.GetClassOrDecltype())))
 	}
 	return strings.Join(specifiers, ", ")

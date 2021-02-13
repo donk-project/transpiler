@@ -4,8 +4,10 @@
 package writer
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -19,10 +21,12 @@ type RegistrarContext struct {
 	TypeRegistrarInclude string
 	Parser               *parser.Parser
 	RootInclude          string
+	TypeIncludes []string
 }
 
+// TODO: Migrate TypeRegistrar templates over to ordinary codegen
 func WriteTypeRegistrar(ctxt RegistrarContext) {
-	rfpath, err := bazel.Runfile("snowfrost/donk/transpiler/templates")
+	rfpath, err := bazel.Runfile("templates")
 	if err != nil {
 		panic(err)
 	}
@@ -50,6 +54,18 @@ func WriteTypeRegistrar(ctxt RegistrarContext) {
 	if err != nil {
 		panic(err)
 	}
+
+	ctxt.TypeIncludes = append(ctxt.TypeIncludes, strings.TrimLeft(fmt.Sprintf("%v/root.h", ctxt.RootInclude), "/"))
+	for path, _ := range ctxt.Parser.TypesByPath {
+		if !path.IsRoot() {
+			inc := fmt.Sprintf("%v%v.h",
+				ctxt.RootInclude,
+				strings.ToLower(path.FullyQualifiedString()))
+			ctxt.TypeIncludes = append(ctxt.TypeIncludes, strings.TrimLeft(inc, "/"))
+		}
+	}
+
+	sort.Slice(ctxt.TypeIncludes, makeSortHeaders(ctxt.TypeIncludes))
 
 	x, err := os.Create(abs + "/type_registrar.cc")
 	defer x.Close()

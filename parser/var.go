@@ -16,7 +16,6 @@ type DMVar struct {
 	Type         *DMType
 	Name         string
 	Proto        *astpb.TypeVar
-	ConstantType string
 	Path         *paths.Path
 }
 
@@ -54,6 +53,12 @@ func CachedVar(s *Parser, p *paths.Path) *DMVar {
 
 func (v *DMVar) HasStaticValue() bool {
 	if v.Proto.GetValue().GetExpression() != nil {
+		return true
+	}
+	if v.Proto.GetValue().GetConstant() != nil {
+		if v.Proto.GetValue().GetConstant().GetNull() != nil {
+			return false
+		}
 		return true
 	}
 	return false

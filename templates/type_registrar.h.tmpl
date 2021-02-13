@@ -1,0 +1,23 @@
+// START - Generated from type_registrar.h.tmpl			
+
+#ifndef __SNOWFROST__{{$.CoreNamespace}}_TYPE_REGISTRAR_H__			
+#define __SNOWFROST__{{$.CoreNamespace}}_TYPE_REGISTRAR_H__			
+
+#include "donk/core/iota.h"			
+#include "donk/core/vars.h"			
+#include "donk/core/procs.h"			
+
+#include <functional>			
+#include <map>			
+#include <vector>			
+#include <string>			
+
+namespace {{$.CoreNamespace}} {			
+
+void RegisterAll(std::map<donk::path_t, std::vector<std::function<void(donk::iota_t&)>>>& collector);			
+
+} // namespace {{$.CoreNamespace}}			
+
+#endif //  __SNOWFROST__{{$.CoreNamespace}}_TYPE_REGISTRAR_H__			
+
+// END - Generated from type_registrar.h.tmpl

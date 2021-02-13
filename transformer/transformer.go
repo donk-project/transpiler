@@ -11,34 +11,10 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
-	cctpb "snowfrost.garden/vasker/cc_grammar"
 	"snowfrost.garden/donk/transpiler/parser"
 	"snowfrost.garden/donk/transpiler/paths"
+	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
-
-type VarType int
-
-const (
-	VarTypeUnknown VarType = iota
-	VarTypeInt
-	VarTypeFloat
-	VarTypeString
-	VarTypeDMObject
-	VarTypeResource
-	VarTypePrefab
-	VarTypeList
-)
-
-func (v VarType) String() string {
-	return [...]string{"Int", "Float", "String", "DMObject", "Resource", "Prefab", "List"}[v]
-}
-
-type varRepresentation struct {
-	name         string
-	defaultValue string
-	curValue     string
-	varType      VarType
-}
 
 type Transformer struct {
 	coreNamespace string
@@ -71,7 +47,7 @@ func New(p *parser.Parser, cn string, ip string) *Transformer {
 		includePrefix: ip,
 	}
 
-	binaryPbPath, err := bazel.Runfile("snowfrost/donk/transpiler/core.binarypb")
+	binaryPbPath, err := bazel.Runfile("core.binarypb")
 	if err != nil {
 		panic(err)
 	}
@@ -149,13 +125,64 @@ func (t Transformer) scan(p paths.Path) {
 			nsDefn.FunctionDefinitions = append(nsDefn.FunctionDefinitions, funcDefn)
 		}
 	}
-	if procCount > 0 {
-		t.curScope.addDeclHeader("\"snowfrost/donk/core/procs.h\"")
+
+	if t.isCoreGen() && t.curScope.curPath.Equals("/world") {
+		procCount += 1
+		fd := &cctpb.FunctionDeclaration{
+			Name: proto.String(BroadcastRedirectProcName),
+			ReturnType: &cctpb.CppType{
+				PType: cctpb.CppType_NONE.Enum(),
+				Name:  proto.String("void"),
+			},
+		}
+
+		fd.Arguments = append(fd.Arguments,
+			&cctpb.FunctionArgument{
+				Name: proto.String("ctxt"),
+				CppType: &cctpb.CppType{
+					PType: cctpb.CppType_REFERENCE.Enum(),
+					Name:  proto.String("donk::proc_ctxt_t"),
+				},
+			})
+
+		fd.Arguments = append(fd.Arguments,
+			&cctpb.FunctionArgument{
+				Name: proto.String("args"),
+				CppType: &cctpb.CppType{
+					PType: cctpb.CppType_REFERENCE.Enum(),
+					Name:  proto.String("donk::proc_args_t"),
+				},
+			})
+
+		nsDecl.FunctionDeclarations = append(nsDecl.FunctionDeclarations, fd)
+		broadcastFunctionDefn := &cctpb.FunctionDefinition{
+			Declaration: fd,
+		}
+		nsDefn.FunctionDefinitions = append(nsDefn.FunctionDefinitions, broadcastFunctionDefn)
 	}
 
-	if !t.isCoreGen() {
-		t.curScope.addDeclHeader("\"snowfrost/donk/core/iota.h\"")
-		t.curScope.addDefnHeader("\"snowfrost/donk/core/iota.h\"")
+	if procCount > 0 {
+		t.curScope.addDeclHeader("\"donk/core/procs.h\"")
+	}
+
+	if t.isCoreGen() && !t.curScope.curPath.IsRoot() {
+		nsDefn.Constructors = append(nsDefn.Constructors, t.generateCoreConstructor())
+		registerFd := &cctpb.FunctionDeclaration{
+			Name: proto.String("InternalCoreRegister"),
+			ReturnType: &cctpb.CppType{
+				PType: cctpb.CppType_NONE.Enum(),
+				Name:  proto.String("void"),
+			},
+			MemberOf: &cctpb.Identifier{
+				Id: proto.String(t.curScope.curPath.Basename + "_coretype"),
+			},
+		}
+		internalCoreReg := t.generateInternalCoreRegister(*ns)
+		internalCoreReg.Declaration = registerFd
+		nsDefn.FunctionDefinitions = append(nsDefn.FunctionDefinitions, internalCoreReg)
+	} else {
+		t.curScope.addDeclHeader("\"donk/core/iota.h\"")
+		t.curScope.addDefnHeader("\"donk/core/iota.h\"")
 		registerFd := &cctpb.FunctionDeclaration{
 			Name: proto.String("Register"),
 			ReturnType: &cctpb.CppType{
@@ -179,8 +206,8 @@ func (t Transformer) scan(p paths.Path) {
 		nsDefn.FunctionDefinitions = append(nsDefn.FunctionDefinitions, registerFuncDefn)
 	}
 
-	t.curScope.addDeclHeader("\"snowfrost/donk/core/procs.h\"")
-	t.curScope.addDefnHeader("\"snowfrost/donk/core/procs.h\"")
+	t.curScope.addDeclHeader("\"donk/core/procs.h\"")
+	t.curScope.addDefnHeader("\"donk/core/procs.h\"")
 
 	t.curScope.curDeclFile.NamespacedDeclarations = append(
 		t.curScope.curDeclFile.NamespacedDeclarations, nsDecl)
@@ -251,13 +278,12 @@ func (t Transformer) walkBlock(block *astpb.Block) *cctpb.BlockDefinition {
 	blockDef := &cctpb.BlockDefinition{}
 	for _, stmt := range block.GetStatement() {
 		blockDef.Statements = append(blockDef.Statements, t.walkStatement(stmt))
-		// log.Printf("stmt: %v", proto.MarshalTextString(stmt))
 	}
 	return blockDef
 }
 
 func (t Transformer) declaredInPathOrParents(name string) bool {
-	if t.curScope.hasVar(name) {
+	if t.curScope.HasField(name) {
 		return true
 	}
 

@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"time"
-	"strings"
 
 	"github.com/golang/protobuf/proto"
 	"snowfrost.garden/donk/transpiler/parser"
@@ -32,7 +31,6 @@ func main() {
   // have a different root name. `tgcc` refers to 'tgstation' and '.cc', the C++
   // definition file extension.
 	projectName := flag.String("project_name", "tgcc", "Name of generated C++ project (filename friendly)")
-	includePrefix := flag.String("include_prefix", "", "Prefix to append to include statements")
 	flag.Parse()
 
 	if *outputPath == "" {
@@ -45,10 +43,6 @@ func main() {
 		panic("No --project_name specified")
 	}
 
-	prefix := ""
-	if *includePrefix != "" {
-		prefix = strings.TrimRight(*includePrefix, "/") + "/"	
-	}
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
@@ -77,7 +71,7 @@ func main() {
 	duration := time.Since(start)
 	log.Printf("%6.2fs parsing", duration.Seconds())
 
-	t := transformer.New(p, *projectName, prefix + *projectName)
+	t := transformer.New(p, *projectName, *projectName)
 	t.BeginTransform()
 
 	w := writer.New(t.Project(), *outputPath)
@@ -87,8 +81,8 @@ func main() {
 		CoreNamespace:        t.CoreNamespace(),
 		OutputPath:           *outputPath,
 		Parser:               p,
-		RootInclude:          prefix,
-		TypeRegistrarInclude: prefix + *projectName + "/type_registrar.h",
+		RootInclude:          *projectName,
+		TypeRegistrarInclude: *projectName + "/type_registrar.h",
 	}
 
 	writer.WriteTypeRegistrar(ctxt)

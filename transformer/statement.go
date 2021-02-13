@@ -33,6 +33,25 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 			stmt.Value = &cctpb.Statement_ExpressionStatement{mae}
 			return stmt
 		}
+	case s.GetVar() != nil:
+		{
+			if s.GetVar().GetValue().GetBase() != nil {
+				vr := varRepresentation{
+					name:     s.GetVar().GetName(),
+					varScope: VarScopeLocal,
+				}
+				if isDeclaringNewDMObject(s.GetVar().GetValue()) {
+					vr.varType = VarTypeDMObject
+				}
+				t.curScope.AddScopedVar(vr)
+				return t.declareVarWithVal(
+					s.GetVar().GetName(),
+					t.walkExpression(s.GetVar().GetValue()),
+					vr.varType,
+				)
+			}
+			return declareVar(s.GetVar().GetName())
+		}
 	}
 	panic(fmt.Sprintf("cannot walk unsupported statement %v", proto.MarshalTextString(s)))
 }

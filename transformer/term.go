@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
+	"snowfrost.garden/donk/transpiler/paths"
 	astpb "snowfrost.garden/donk/proto/ast"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
@@ -82,7 +83,7 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 
 	case term.Resource != nil:
 		{
-			t.curScope.addDefnHeader("\"snowfrost/donk/core/vars.h\"")
+			t.curScope.addDefnHeader("\"donk/core/vars.h\"")
 			e = resourceId(*term.Resource)
 		}
 
@@ -146,7 +147,7 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 			for _, collection := range is.GetCollections() {
 				if collection.GetExpr() != nil {
 					colExpr := t.walkExpression(collection.GetExpr())
-					if isFmtRedirected(colExpr) {
+					if t.isFmtRedirected(colExpr) {
 						ue := &cctpb.UnaryExpression{
 							Operator: cctpb.UnaryExpression_POINTER_INDIRECTION.Enum(),
 							Operand:  colExpr,
@@ -195,7 +196,13 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 
 	case term.GetNew() != nil:
 		{
-			e = genericCtxtCall("make")
+			typ := term.GetNew().GetType()
+			if typ.GetPrefab() != nil && len(typ.GetPrefab().Path) > 0 {
+				p := paths.NewFromTypePaths(typ.GetPrefab().Path)
+				e = ctxtMakeCall(*p)
+			} else {
+				e = genericCtxtCall("make")
+			}
 		}
 
 	case term.GetExpr() != nil:

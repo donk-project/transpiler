@@ -7,8 +7,9 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
-	cctpb "snowfrost.garden/vasker/cc_grammar"
+	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/paths"
+	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
 func genericCtxtCall(n string) *cctpb.Expression {
@@ -33,6 +34,51 @@ func genericCtxtCall(n string) *cctpb.Expression {
 	}
 	rhs := &cctpb.Expression{
 		Value: &cctpb.Expression_FunctionCallExpression{srcCall},
+	}
+
+	mae.Lhs = lhs
+	mae.Rhs = rhs
+
+	expr := &cctpb.Expression{
+		Value: &cctpb.Expression_MemberAccessExpression{mae},
+	}
+	return expr
+}
+
+func ctxtMakeCall(p paths.Path) *cctpb.Expression {
+	mae := &cctpb.MemberAccessExpression{
+		Operator: cctpb.MemberAccessExpression_MEMBER_OF_OBJECT.Enum(),
+	}
+
+	ctxt := &cctpb.Identifier{
+		Id: proto.String("ctxt"),
+	}
+	lhs := &cctpb.Expression{
+		Value: &cctpb.Expression_IdentifierExpression{ctxt},
+	}
+
+	mk := &cctpb.Identifier{
+		Id: proto.String("make"),
+	}
+	mkCall := &cctpb.FunctionCallExpression{
+		Name: &cctpb.Expression{
+			Value: &cctpb.Expression_IdentifierExpression{mk},
+		},
+	}
+	mkCall.Arguments = append(mkCall.Arguments,
+		&cctpb.FunctionCallExpression_ExpressionArg{
+			Value: &cctpb.FunctionCallExpression_ExpressionArg_Expression{
+				&cctpb.Expression{
+					Value: &cctpb.Expression_LiteralExpression{
+						&cctpb.Literal{
+							Value: &cctpb.Literal_StringLiteral{p.FullyQualifiedString()},
+						},
+					},
+				},
+			},
+		})
+	rhs := &cctpb.Expression{
+		Value: &cctpb.Expression_FunctionCallExpression{mkCall},
 	}
 
 	mae.Lhs = lhs
@@ -122,6 +168,25 @@ func pathExpression(p paths.Path) *cctpb.Expression {
 	}
 }
 
+func prefabExpression(p paths.Path) *cctpb.Expression {
+	i := &cctpb.Identifier{
+		Namespace: proto.String("donk"),
+		Id:        proto.String("prefab_t"),
+	}
+	fc := &cctpb.FunctionCallExpression{
+		Name: &cctpb.Expression{
+			Value: &cctpb.Expression_IdentifierExpression{i},
+		},
+	}
+	addFuncExprArg(fc, &cctpb.Expression{
+		Value: &cctpb.Expression_LiteralExpression{&cctpb.Literal{
+			Value: &cctpb.Literal_StringLiteral{p.FullyQualifiedString()}}},
+	})
+	return &cctpb.Expression{
+		Value: &cctpb.Expression_FunctionCallExpression{fc},
+	}
+}
+
 func ctxtUsr() *cctpb.Expression {
 	return genericCtxtCall("usr")
 }
@@ -148,7 +213,6 @@ func coreProcCall(name string) *cctpb.Expression {
 }
 
 func isVarAssignFromPtr(e *cctpb.Expression) bool {
-	// log.Printf("isVarAssignFromPtr: %v", proto.MarshalTextString(e))
 	if e.GetMemberAccessExpression() == nil {
 		return false
 	}
@@ -165,15 +229,24 @@ func isVarAssignFromPtr(e *cctpb.Expression) bool {
 	return false
 }
 
-func isFmtRedirected(e *cctpb.Expression) bool {
-	// log.Printf("isFmtRedirected: %v", proto.MarshalTextString(e))
+func (t Transformer) isFmtRedirected(e *cctpb.Expression) bool {
 	if proto.Equal(e, ctxtSrc()) || proto.Equal(e, ctxtUsr()) {
 		return true
 	}
-	// just checks for "args", should probably check for "args#v"
-	if e.GetMemberAccessExpression().GetLhs().GetIdentifierExpression().GetId() == "args" {
-		return true
+
+	lhs := e.GetMemberAccessExpression().GetLhs()
+	if lhs != nil {
+		if isRawIdentifier(lhs) {
+			rId := rawIdentifier(lhs)
+			if t.curScope.HasLocal(rId) && t.curScope.VarType(rId) == VarTypeDMObject {
+				return true
+			}
+            if rId == "args" {
+                return true
+            }
+		}
 	}
+
 	return false
 }
 
@@ -195,4 +268,166 @@ func addFuncInitListArg(fce *cctpb.FunctionCallExpression, exprs ...*cctpb.Expre
 	fce.Arguments = append(fce.Arguments, &cctpb.FunctionCallExpression_ExpressionArg{
 		Value: &cctpb.FunctionCallExpression_ExpressionArg_InitializerList{iList},
 	})
+}
+
+func declareVar(name string) *cctpb.Statement {
+	ds := &cctpb.DeclarationSpecifier{
+		Value: &cctpb.DeclarationSpecifier_TypeSpecifier{
+			&cctpb.TypeSpecifier{
+				Value: &cctpb.TypeSpecifier_SimpleTypeSpecifier{
+					&cctpb.SimpleTypeSpecifier{
+						Value: &cctpb.SimpleTypeSpecifier_DeclaredName{
+							&cctpb.Identifier{
+								Namespace: proto.String("donk"),
+								Id:        proto.String("var_t"),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	d := &cctpb.Declarator{
+		Value: &cctpb.Declarator_DeclaredName{
+			&cctpb.Identifier{
+				Id: proto.String(name),
+			},
+		},
+	}
+
+	sd := &cctpb.SimpleDeclaration{}
+	sd.Specifiers = append(sd.Specifiers, ds)
+	sd.Declarators = append(sd.Declarators, d)
+
+	return &cctpb.Statement{
+		Value: &cctpb.Statement_DeclarationStatement{
+			&cctpb.Declaration{
+				Value: &cctpb.Declaration_BlockDeclaration{
+					&cctpb.BlockDeclaration{
+						Value: &cctpb.BlockDeclaration_SimpleDeclaration{sd},
+					},
+				},
+			},
+		},
+	}
+}
+
+func isStringLiteral(e *cctpb.Expression) bool {
+	switch e.GetValue().(type) {
+	case *cctpb.Expression_LiteralExpression:
+		switch e.GetLiteralExpression().GetValue().(type) {
+		case *cctpb.Literal_StringLiteral:
+			{
+				return true
+			}
+		default:
+			{
+				return false
+			}
+		}
+	default:
+		{
+			return false
+		}
+	}
+}
+
+func (t *Transformer) declareVarWithVal(name string, val *cctpb.Expression, varType VarType) *cctpb.Statement {
+	var ds *cctpb.DeclarationSpecifier
+	if varType == VarTypeDMObject {
+		ds = &cctpb.DeclarationSpecifier{
+			Value: &cctpb.DeclarationSpecifier_TypeSpecifier{
+				&cctpb.TypeSpecifier{
+					Value: &cctpb.TypeSpecifier_SimpleTypeSpecifier{
+						&cctpb.SimpleTypeSpecifier{
+							Value: &cctpb.SimpleTypeSpecifier_DeclaredName{
+								&cctpb.Identifier{
+									Id: proto.String("auto"),
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	} else {
+		ds = &cctpb.DeclarationSpecifier{
+			Value: &cctpb.DeclarationSpecifier_TypeSpecifier{
+				&cctpb.TypeSpecifier{
+					Value: &cctpb.TypeSpecifier_SimpleTypeSpecifier{
+						&cctpb.SimpleTypeSpecifier{
+							Value: &cctpb.SimpleTypeSpecifier_DeclaredName{
+								&cctpb.Identifier{
+									Namespace: proto.String("donk"),
+									Id:        proto.String("var_t"),
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+	if isStringLiteral(val) {
+		t.curScope.addDefnHeader("<string>")
+		val = stdStringCtor(val.GetLiteralExpression().GetStringLiteral())
+	}
+
+	d := &cctpb.Declarator{
+		Initializer: &cctpb.Initializer{
+			Value: &cctpb.Initializer_CopyInitializer{
+				&cctpb.CopyInitializer{
+					Other: val,
+				},
+			},
+		},
+		Value: &cctpb.Declarator_DeclaredName{
+			&cctpb.Identifier{
+				Id: proto.String(name),
+			},
+		},
+	}
+
+	sd := &cctpb.SimpleDeclaration{}
+	sd.Specifiers = append(sd.Specifiers, ds)
+	sd.Declarators = append(sd.Declarators, d)
+
+	return &cctpb.Statement{
+		Value: &cctpb.Statement_DeclarationStatement{
+			&cctpb.Declaration{
+				Value: &cctpb.Declaration_BlockDeclaration{
+					&cctpb.BlockDeclaration{
+						Value: &cctpb.BlockDeclaration_SimpleDeclaration{sd},
+					},
+				},
+			},
+		},
+	}
+}
+
+func isRawIdentifier(expr *cctpb.Expression) bool {
+	switch expr.GetValue().(type) {
+	case *cctpb.Expression_IdentifierExpression:
+		{
+			return expr.GetIdentifierExpression().GetNamespace() == "" &&
+				expr.GetIdentifierExpression().GetId() != ""
+		}
+	default:
+		{
+			return false
+		}
+	}
+}
+
+func rawIdentifier(expr *cctpb.Expression) string {
+	if !isRawIdentifier(expr) {
+		panic("asked for raw identifier from expression which is not one")
+	}
+	return expr.GetIdentifierExpression().GetId()
+}
+
+func isDeclaringNewDMObject(expr *astpb.Expression) bool {
+	return expr.GetBase().GetTerm().GetNew().GetType().GetPrefab() != nil &&
+		len(expr.GetBase().GetTerm().GetNew().GetType().GetPrefab().Path) > 0
 }

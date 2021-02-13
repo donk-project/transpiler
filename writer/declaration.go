@@ -102,3 +102,14 @@ func printSimpleTypeSpecifier(sts *cctpb.SimpleTypeSpecifier) string {
 		panic(fmt.Sprintf("cannot print unsupported simple type specifier %v", proto.MarshalTextString(sts)))
 	}
 }
+
+func (w Writer) printFunctionDeclaration(fd *cctpb.FunctionDeclaration) string {
+	fs := "%v %v(%v)"
+	cppType := w.printCppType(fd.GetReturnType())
+	name := fd.GetName()
+	args := w.joinArgs(fd.Arguments)
+	if fd.GetMemberOf() != nil {
+		name = printIdentifier(fd.GetMemberOf()) + "::" + name
+	}
+	return fmt.Sprintf(fs, cppType, name, args)
+}

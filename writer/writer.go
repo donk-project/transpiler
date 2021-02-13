@@ -8,10 +8,12 @@ import (
 
 	"os"
 	"path/filepath"
+	"strings"
+	"sort"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
-	cctpb "snowfrost.garden/vasker/cc_grammar"
 	"snowfrost.garden/donk/transpiler/paths"
+	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
 type Writer struct {
@@ -29,24 +31,39 @@ func New(project *cctpb.Project, outputPath string) *Writer {
 	var writer Writer
 	writer.outputPath = outputPath
 	writer.project = project
-	rfpath, err := bazel.Runfile("snowfrost/donk/transpiler/templates")
+	rfpath, err := bazel.Runfile("templates")
 	if err != nil {
 		panic(err)
 	}
 	pattern := filepath.Join(rfpath, "transformer_*.tmpl")
 	writer.tmpl, err = template.New("").Funcs(template.FuncMap{
-		"printCppType":        writer.printCppType,
-		"joinArgs":            writer.joinArgs,
-		"printStatement":      printStatement,
-		"printBaseSpecifiers": printBaseSpecifiers,
-		"printMemberSpecifier": printMemberSpecifier,
-
+		"printCppType":             writer.printCppType,
+		"joinArgs":                 writer.joinArgs,
+		"printStatement":           printStatement,
+		"printBaseSpecifiers":      printBaseSpecifiers,
+		"printMemberSpecifier":     writer.printMemberSpecifier,
+		"printFunctionDeclaration": writer.printFunctionDeclaration,
+		"printConstructor": writer.printConstructor,
 	}).ParseGlob(pattern)
 	if err != nil {
 		panic(err)
 	}
 
 	return &writer
+}
+
+func makeSortHeaders(headers []string) func(a, b int)bool {
+	return func(a, b int) bool {
+		aS := headers[a]
+		bS := headers[b]
+	if strings.HasPrefix(aS, "<") && !strings.HasPrefix(bS, "<") {
+		return true
+	}
+	if strings.HasPrefix(bS, "<") && !strings.HasPrefix(aS, "<") {
+		return false 
+	}
+	return aS < bS
+	}
 }
 
 func (w *Writer) WriteOutput() {
@@ -56,6 +73,9 @@ func (w *Writer) WriteOutput() {
 	}
 
 	for _, declFile := range w.project.GetDeclarationFiles() {
+		sort.Slice(declFile.GetPreamble().GetHeaders(), 
+			makeSortHeaders(declFile.GetPreamble().GetHeaders()))
+		
 		sp := paths.New(declFile.GetFileMetadata().GetSourcePath())
 		dir := abs + sp.ParentPath().FullyQualifiedString()
 		os.MkdirAll(dir, 0755)
@@ -71,6 +91,8 @@ func (w *Writer) WriteOutput() {
 	}
 
 	for _, defnFile := range w.project.GetDefinitionFiles() {
+		sort.Slice(defnFile.GetPreamble().GetHeaders(), 
+			makeSortHeaders(defnFile.GetPreamble().GetHeaders()))
 		sp := paths.New(defnFile.GetFileMetadata().GetSourcePath())
 		dir := abs + sp.ParentPath().FullyQualifiedString()
 		os.MkdirAll(dir, 0755)

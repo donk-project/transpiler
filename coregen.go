@@ -33,7 +33,7 @@ func main() {
 		prefix = strings.TrimRight(*includePrefix, "/")
 	}
 
-	binarypb_path, err := bazel.Runfile("snowfrost/donk/transpiler/core.binarypb")
+	binarypb_path, err := bazel.Runfile("core.binarypb")
 	if err != nil {
 		panic(err)
 	}

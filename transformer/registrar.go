@@ -118,13 +118,19 @@ func (t *Transformer) generateRegistrationFunction(namespace string) *cctpb.Func
 				id := &cctpb.Identifier{
 					Id: proto.String(fmt.Sprintf("donk_value_var__%v", v.VarName())),
 				}
-				term := v.Proto.GetValue().GetExpression().GetBase().GetTerm()
 				cInit := &cctpb.CopyInitializer{}
-				if term.StringT != nil {
-					t.curScope.addDefnHeader("<string>")
-					cInit.Other = stdStringCtor(term.GetStringT())
+				if v.Proto.GetValue().GetExpression() != nil {
+					term := v.Proto.GetValue().GetExpression().GetBase().GetTerm()
+					if term.StringT != nil {
+						t.curScope.addDefnHeader("<string>")
+						cInit.Other = stdStringCtor(term.GetStringT())
+					} else {
+						cInit.Other = t.walkExpression(v.Proto.GetValue().GetExpression())
+					}
+				} else if v.Proto.GetValue().GetConstant() != nil {
+					cInit.Other = t.walkConstant(v.Proto.GetValue().GetConstant())
 				} else {
-					cInit.Other = t.walkExpression(v.Proto.GetValue().GetExpression())
+					panic(fmt.Sprintf("cannot print unknown static value %v", proto.MarshalTextString(v.Proto)))
 				}
 				init := &cctpb.Initializer{
 					Value: &cctpb.Initializer_CopyInitializer{cInit},

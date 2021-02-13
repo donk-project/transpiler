@@ -5,10 +5,15 @@ package transformer
 
 import (
 	"fmt"
+  _	"log"
 
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
+)
+
+const (
+	BroadcastRedirectProcName = "DONK_Broadcast"
 )
 
 func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
@@ -22,6 +27,17 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 			if e.GetBase().GetTerm() != nil {
 				if len(e.GetBase().GetFollow()) > 0 {
 					term := t.walkTerm(e.GetBase().GetTerm())
+					isVarAccess := false
+					if isRawIdentifier(term) {
+						rId := rawIdentifier(term)
+						if t.curScope.HasField(rId) {
+							isVarAccess = true
+						} else if t.curScope.HasLocal(rId) {
+							if t.curScope.VarType(rId) == VarTypeDMObject {
+								isVarAccess = true
+							}
+						}
+					}
 					curFollow := &cctpb.MemberAccessExpression{}
 					var follows []*cctpb.MemberAccessExpression
 					for _, follow := range e.GetBase().GetFollow() {
@@ -33,7 +49,8 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 							if field.GetIndexKind() == astpb.IndexKind_INDEX_KIND_DOT {
 								curFollow.Operator = cctpb.MemberAccessExpression_MEMBER_OF_OBJECT.Enum()
 								if field.S != nil {
-									if proto.Equal(term, ctxtSrc()) || proto.Equal(term, ctxtUsr()) {
+									if isVarAccess || proto.Equal(term, ctxtSrc()) || proto.Equal(term, ctxtUsr()) {
+										curFollow.Operator = cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum()
 										curFollow.Rhs = getObjVar(field.GetS())
 									} else {
 										curFollow.Rhs = &cctpb.Expression{
@@ -119,8 +136,9 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 					isView := proto.Equal(lhs, coreProcCall("view"))
 					isBitwiseLShift := expr.GetArithmeticExpression().GetOperator() == cctpb.ArithmeticExpression_BITWISE_LSHIFT
 
+					// TODO: Also world.log, or any list containing mobs, or any mob
 					if (isView || isWorld) && isBitwiseLShift {
-						// rewrite ctxt.world() << foo --> ctxt.world()->p("Broadcast")
+						// rewrite ctxt.world() << foo --> ctxt.world()->p("DONK_Broadcast")
 						mae := &cctpb.MemberAccessExpression{
 							Operator: cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum(),
 							Lhs:      lhs,
@@ -140,7 +158,7 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 									&cctpb.Expression{
 										Value: &cctpb.Expression_LiteralExpression{
 											&cctpb.Literal{
-												Value: &cctpb.Literal_StringLiteral{"Broadcast"},
+												Value: &cctpb.Literal_StringLiteral{BroadcastRedirectProcName},
 											},
 										},
 									},

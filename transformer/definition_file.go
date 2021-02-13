@@ -18,14 +18,21 @@ func (t Transformer) buildDefnFile() {
 	t.curScope.curDefnHeaders = make(map[string]bool)
 	bName := strings.ToLower(
 		strings.TrimPrefix(t.curScope.curPath.FullyQualifiedString(), "/"))
-	t.curScope.curDefnFile.FileMetadata.Filename = proto.String(bName + ".cc")
-	t.curScope.curDefnFile.BaseInclude = proto.String("\"" + t.includePrefix + "/" + bName + ".h\"")
+	incPrefix := t.includePrefix + "/"
+	if incPrefix == "/" {
+		incPrefix = ""
+	}
 	if t.curScope.curPath.IsRoot() {
-		t.curScope.curDefnFile.BaseInclude = proto.String("\"" + t.includePrefix + "/" + bName + "root.h\"")
+		t.curScope.curDefnFile.BaseInclude = proto.String("\"" + incPrefix + "root.h\"")
 		t.curScope.curDefnFile.FileMetadata.Filename = proto.String(strings.ToLower(
 			strings.TrimPrefix(t.curScope.curPath.ParentPath().FullyQualifiedString(), "/")) + "root.cc")
+	} else {
+		t.curScope.curDefnFile.BaseInclude = proto.String("\"" + incPrefix + bName + ".h\"")
+		t.curScope.curDefnFile.FileMetadata.Filename = proto.String(bName + ".cc")
 	}
+
 	t.lastFileId++
+
 	t.curScope.curDefnFile.FileMetadata.FileId = proto.Uint32(t.lastFileId)
 	t.curScope.curDefnFile.FileMetadata.SourcePath = proto.String(t.curScope.curPath.FullyQualifiedString())
 }

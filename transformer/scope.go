@@ -11,6 +11,39 @@ import (
 	"snowfrost.garden/donk/transpiler/paths"
 )
 
+type VarType int
+
+const (
+	VarTypeUnknown VarType = iota
+	VarTypeInt
+	VarTypeFloat
+	VarTypeString
+	VarTypeDMObject
+	VarTypeResource
+	VarTypePrefab
+	VarTypeList
+)
+
+type VarScope int
+
+const (
+	VarScopeUnknown VarScope = iota
+	VarScopeField 
+	VarScopeLocal
+)
+
+func (v VarType) String() string {
+	return [...]string{"Unknown", "Int", "Float", "String", "DMObject", "Resource", "Prefab", "List"}[v]
+}
+
+type varRepresentation struct {
+	name         string
+	defaultValue string
+	curValue     string
+	varType      VarType
+	varScope VarScope
+}
+
 type scopeCtxt struct {
 	curDeclFile    *cctpb.DeclarationFile
 	curDefnFile    *cctpb.DefinitionFile
@@ -22,6 +55,10 @@ type scopeCtxt struct {
 	curDefnHeaders map[string]bool
 	curDeclHeaders map[string]bool
 	parentScope    *scopeCtxt
+}
+
+func (s *scopeCtxt) AddScopedVar(vr varRepresentation) {
+	s.declaredVars = append(s.declaredVars, vr)
 }
 
 func (s *scopeCtxt) addDeclHeader(n string) {
@@ -40,14 +77,34 @@ func (s *scopeCtxt) child() *scopeCtxt {
 	return child
 }
 
-func (s *scopeCtxt) hasVar(name string) bool {
+func (s *scopeCtxt) VarType(name string) VarType {
 	for _, v := range s.declaredVars {
-		if v.name == name {
+		if v.name == name{
+			return v.varType
+		}
+	}
+	panic(fmt.Sprintf("asked for VarType of undefined var %v", name))
+}
+
+func (s *scopeCtxt) HasField(name string) bool {
+	for _, v := range s.declaredVars {
+		if v.name == name && v.varScope == VarScopeField {
 			return true
 		}
 	}
 	return false
 }
+
+func (s *scopeCtxt) HasLocal(name string) bool {
+	for _, v := range s.declaredVars {
+		if v.name == name && v.varScope == VarScopeLocal {
+			return true
+		}
+	}
+
+	return false
+}
+
 
 func (s *scopeCtxt) isRoot() bool {
 	return s.curPath.IsRoot()

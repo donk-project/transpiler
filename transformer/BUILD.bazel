@@ -8,6 +8,7 @@ package(default_visibility = ["@donk_transpiler//:pkg"])
 go_library(
     name = "transformer",
     srcs = [
+        "constant.go",
         "coregen.go",
         "declaration_file.go",
         "definition_file.go",
