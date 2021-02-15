@@ -431,3 +431,34 @@ func isDeclaringNewDMObject(expr *astpb.Expression) bool {
 	return expr.GetBase().GetTerm().GetNew().GetType().GetPrefab() != nil &&
 		len(expr.GetBase().GetTerm().GetNew().GetType().GetPrefab().Path) > 0
 }
+
+func isRawInt(expr *astpb.Expression) bool {
+	if expr.GetBase().GetTerm().IntT != nil {
+		return true
+	}
+	if expr.GetBase().GetTerm().GetExpr() != nil {
+		return isRawInt(expr.GetBase().GetTerm().GetExpr())
+	}
+	return false
+}
+
+func rawInt(expr *astpb.Expression) int32 {
+	if expr.GetBase().GetTerm().IntT != nil {
+		return expr.GetBase().GetTerm().GetIntT()
+	}
+	if expr.GetBase().GetTerm().GetExpr() != nil {
+		return rawInt(expr.GetBase().GetTerm().GetExpr())
+	}
+
+	panic(fmt.Sprintf("asked for raw int of unsupported expression %v", proto.MarshalTextString(expr)))
+}
+
+func makeIntExpr(i int32) *cctpb.Expression{
+	return &cctpb.Expression{
+		Value: &cctpb.Expression_LiteralExpression{
+			&cctpb.Literal{
+				Value: &cctpb.Literal_IntegerLiteral{int64(i)},
+			},
+		},
+	}
+}

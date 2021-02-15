@@ -52,6 +52,37 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 			}
 			return declareVar(s.GetVar().GetName())
 		}
-	}
+	case s.GetDoWhile() != nil:
+		{
+			if s.GetDoWhile().GetCondition() == nil {
+				panic(fmt.Sprintf("no expected condition in do-while: %v", proto.MarshalTextString(s.GetDoWhile())))
+			}
+			dwExpr := t.walkExpression(s.GetDoWhile().GetCondition())
+			var dwStmts []*cctpb.Statement
+			for _, dwStmt := range s.GetDoWhile().GetBlock().GetStatement() {
+				dwStmts = append(dwStmts, t.walkStatement(dwStmt))
+			}
+			stmt.Value = &cctpb.Statement_DoWhile{
+				&cctpb.DoWhile{
+					Condition: dwExpr,
+					BlockDefinition: &cctpb.BlockDefinition{
+						Statements: dwStmts,
+					},
+				},
+			}
+			return stmt
+			// var stmts []string
+			// for _, dwStmt := range s.GetDoWhile().GetBlock().GetStatement() {
+			// 	stmts = append(stmts, t.walkStatement(dwStmt))
+			// }
+			// return fmt.Sprintf("do {\n%v\n} while (%v)\n",
+		}
+	// case s.GetForRange() != nil: {
+	// 	rbf := &cctpb.RangeBasedFor{}
+	// 	if isRawInt(s.GetForRange().GetStart()) && isRawInt(s.GetForRange().GetEnd()) {
+	// 		decl := t.declareVarWithVal(s.GetForRange().GetName(), makeIntExpr(rawInt(s.GetForRange().GetStart())), VarTypeInt)
+	// 	}
+	// }
+}
 	panic(fmt.Sprintf("cannot walk unsupported statement %v", proto.MarshalTextString(s)))
 }
