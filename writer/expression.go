@@ -20,8 +20,8 @@ func printExpression(e *cctpb.Expression) string {
 		return printUnaryExpression(e.GetUnaryExpression())
 	case *cctpb.Expression_ArithmeticExpression:
 		return printArithmeticExpression(e.GetArithmeticExpression())
-	case *cctpb.Expression_LogicalExpression:
-		return printLogicalExpression(e.GetLogicalExpression())
+	// case *cctpb.Expression_LogicalExpression:
+	// 	return printLogicalExpression(e.GetLogicalExpression())
 	case *cctpb.Expression_ComparisonExpression:
 		return printComparisonExpression(e.GetComparisonExpression())
 	case *cctpb.Expression_MemberAccessExpression:
@@ -61,7 +61,8 @@ func printLogicalExpression(e *cctpb.LogicalExpression) string {
 }
 
 func printComparisonExpression(e *cctpb.ComparisonExpression) string {
-	return "COMPARISON"
+	return fmt.Sprintf(COMPARISON_OP_FORMATTERS[e.GetOperator()],
+		printExpression(e.GetLhs()), printExpression(e.GetRhs()))
 }
 
 func printMemberAccessExpression(e *cctpb.MemberAccessExpression) string {

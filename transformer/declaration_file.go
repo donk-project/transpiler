@@ -7,14 +7,15 @@ import (
 	"fmt"
 	"strings"
 
+	"snowfrost.garden/donk/transpiler/scope"
 	"github.com/golang/protobuf/proto"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
 func (t Transformer) buildDeclFile() {
 	declFilename := strings.ToLower(
-		strings.TrimPrefix(t.curScope.curPath.FullyQualifiedString(), "/")) + ".h"
-	if t.curScope.curPath.IsRoot() {
+		strings.TrimPrefix(t.curScope().CurPath.FullyQualifiedString(), "/")) + ".h"
+	if t.curScope().CurPath.IsRoot() {
 		declFilename = "root.h"
 	}
 	ifdef := fmt.Sprintf("__%v_%v__",
@@ -27,17 +28,16 @@ func (t Transformer) buildDeclFile() {
 		Preamble:     &cctpb.Preamble{},
 	}
 	t.lastFileId++
-	t.curScope.curDeclFile = declFile
-	t.curScope.curDeclHeaders = make(map[string]bool)
-
-	t.curScope.curDeclFile.FileMetadata = &cctpb.FileMetadata{
+	t.curScope().CurDeclFile = declFile
+	t.curScope().CurDeclHeaders = scope.NewHeaderCollection() 
+	t.curScope().CurDeclFile.FileMetadata = &cctpb.FileMetadata{
 		FileId:     proto.Uint32(t.lastFileId),
-		SourcePath: proto.String(t.curScope.curPath.FullyQualifiedString()),
+		SourcePath: proto.String(t.curScope().CurPath.FullyQualifiedString()),
 		Filename:   proto.String(declFilename),
 	}
-	if t.curScope.curPath.IsRoot() {
-		t.curScope.curDeclFile.FileMetadata.Filename = proto.String(strings.ToLower(
-			strings.TrimPrefix(t.curScope.curPath.ParentPath().FullyQualifiedString(), "/")) + "root.h")
+	if t.curScope().CurPath.IsRoot() {
+		t.curScope().CurDeclFile.FileMetadata.Filename = proto.String(strings.ToLower(
+			strings.TrimPrefix(t.curScope().CurPath.ParentPath().FullyQualifiedString(), "/")) + "root.h")
 	}
 
 }

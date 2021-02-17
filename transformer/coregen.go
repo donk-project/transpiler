@@ -11,11 +11,11 @@ import (
 
 func (t Transformer) buildCoretypeDecl() *cctpb.ClassDeclaration {
 	clsDecl := &cctpb.ClassDeclaration{
-		Name: proto.String(t.curScope.curPath.Basename + "_coretype"),
+		Name: proto.String(t.curScope().CurPath.Basename + "_coretype"),
 	}
 
-	if t.curScope.curPath.ParentPath().IsRoot() {
-		t.curScope.addDeclHeader("\"donk/core/iota.h\"")
+	if t.curScope().CurPath.ParentPath().IsRoot() {
+		t.curScope().AddDeclHeader("\"donk/core/iota.h\"")
 		clsDecl.BaseSpecifiers = append(clsDecl.BaseSpecifiers,
 			&cctpb.BaseSpecifier{
 				AccessSpecifier: cctpb.AccessSpecifier_PUBLIC.Enum(),
@@ -27,14 +27,14 @@ func (t Transformer) buildCoretypeDecl() *cctpb.ClassDeclaration {
 			},
 		)
 	} else {
-		t.curScope.addDeclHeader(
-			fmt.Sprintf("\"donk/api%v.h\"", t.curScope.curPath.ParentPath().FullyQualifiedString()))
+		t.curScope().AddDeclHeader(
+			fmt.Sprintf("\"donk/api%v.h\"", t.curScope().CurPath.ParentPath().FullyQualifiedString()))
 		clsDecl.BaseSpecifiers = append(clsDecl.BaseSpecifiers,
 			&cctpb.BaseSpecifier{
 				AccessSpecifier: cctpb.AccessSpecifier_PUBLIC.Enum(),
 				ClassOrDecltype: &cctpb.Identifier{
-					Namespace: proto.String(t.coreNamespace + "::" + t.curScope.curPath.ParentPath().AsNamespace()),
-					Id:        proto.String(t.curScope.curPath.ParentPath().Basename + "_coretype"),
+					Namespace: proto.String(t.coreNamespace + "::" + t.curScope().CurPath.ParentPath().AsNamespace()),
+					Id:        proto.String(t.curScope().CurPath.ParentPath().Basename + "_coretype"),
 				},
 			},
 		)
@@ -164,8 +164,8 @@ func (t *Transformer) generateInternalCoreRegister(namespace string) *cctpb.Func
 	blockDefn := &cctpb.BlockDefinition{}
 	var stmts []*cctpb.Statement
 
-	procs := t.curScope.curType.Procs
-	vars := t.curScope.curType.Vars
+	procs := t.curScope().CurType.Procs
+	vars := t.curScope().CurType.Vars
 
 	for _, proc := range procs {
 		if t.shouldEmitProc(proc) {
@@ -177,10 +177,15 @@ func (t *Transformer) generateInternalCoreRegister(namespace string) *cctpb.Func
 		}
 	}
 
-	if t.isCoreGen() && t.curScope.curPath.Equals("/world") {
+	if t.isCoreGen() && t.curScope().CurPath.Equals("/world") {
 		stmts = append(stmts, &cctpb.Statement{
 			Value: &cctpb.Statement_ExpressionStatement{
 				t.makeCoregenRegisterProcFCE(namespace, BroadcastRedirectProcName, BroadcastRedirectProcName),
+			},
+		})
+		stmts = append(stmts, &cctpb.Statement{
+			Value: &cctpb.Statement_ExpressionStatement{
+				t.makeCoregenRegisterProcFCE(namespace, BroadcastLogRedirectProcName, BroadcastLogRedirectProcName),
 			},
 		})
 	}
@@ -219,7 +224,7 @@ func (t *Transformer) generateInternalCoreRegister(namespace string) *cctpb.Func
 				if v.Proto.GetValue().GetExpression() != nil {
 					term := v.Proto.GetValue().GetExpression().GetBase().GetTerm()
 					if term.StringT != nil {
-						t.curScope.addDefnHeader("<string>")
+						t.curScope().AddDefnHeader("<string>")
 						cInit.Other = stdStringCtor(term.GetStringT())
 					} else {
 						cInit.Other = t.walkExpression(v.Proto.GetValue().GetExpression())
@@ -284,7 +289,7 @@ func (t *Transformer) generateInternalCoreRegister(namespace string) *cctpb.Func
 }
 
 func (t *Transformer) generateCoreConstructor() *cctpb.Constructor {
-	className := t.curScope.curPath.Basename + "_coretype"
+	className := t.curScope().CurPath.Basename + "_coretype"
 	c := &cctpb.Constructor{
 		ClassName: &cctpb.Identifier{
 			Id: proto.String(fmt.Sprintf("%v::%v", className, className)),
@@ -349,13 +354,13 @@ func (t *Transformer) generateCoreConstructor() *cctpb.Constructor {
 	})
 	c.MemberInitializers = append(c.MemberInitializers, mi)
 
-	if !t.curScope.curPath.ParentPath().IsRoot() {
-		t.curScope.addDefnHeader(
-			fmt.Sprintf("\"donk/api%v.h\"", t.curScope.curPath.ParentPath().FullyQualifiedString()))
+	if !t.curScope().CurPath.ParentPath().IsRoot() {
+		t.curScope().AddDefnHeader(
+			fmt.Sprintf("\"donk/api%v.h\"", t.curScope().CurPath.ParentPath().FullyQualifiedString()))
 		mi := &cctpb.MemberInitializer{
 			Member: &cctpb.Identifier{
-				Namespace: proto.String(t.coreNamespace + "::" + t.curScope.curPath.ParentPath().AsNamespace()),
-				Id:        proto.String(t.curScope.curPath.ParentPath().Basename + "_coretype"),
+				Namespace: proto.String(t.coreNamespace + "::" + t.curScope().CurPath.ParentPath().AsNamespace()),
+				Id:        proto.String(t.curScope().CurPath.ParentPath().Basename + "_coretype"),
 			},
 		}
 
@@ -377,7 +382,7 @@ func (t *Transformer) generateCoreConstructor() *cctpb.Constructor {
 
 	}
 
-	t.curScope.addDefnHeader("\"donk/core/path.h\"")
-	t.curScope.addDefnHeader("\"donk/core/iota.h\"")
+	t.curScope().AddDefnHeader("\"donk/core/path.h\"")
+	t.curScope().AddDefnHeader("\"donk/core/iota.h\"")
 	return c
 }

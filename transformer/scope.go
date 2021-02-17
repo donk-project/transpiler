@@ -1,14 +1,15 @@
 // Donk Project
 // Copyright (c) 2021 Warriorstar Orion <orion@snowfrost.garden>
 // SPDX-License-Identifier: MIT
-package transformer
+package scope
 
 import (
 	"fmt"
+	// "log"
 
-	cctpb "snowfrost.garden/vasker/cc_grammar"
 	"snowfrost.garden/donk/transpiler/parser"
 	"snowfrost.garden/donk/transpiler/paths"
+	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
 type VarType int
@@ -22,82 +23,120 @@ const (
 	VarTypeResource
 	VarTypePrefab
 	VarTypeList
+	VarTypeListIterator
 )
+
+func (v VarType) String() string {
+	return [...]string{"UnknownType", "Int", "Float", "String", "DMObject", "Resource", "Prefab", "List", "ListIterator"}[v]
+}
 
 type VarScope int
 
 const (
 	VarScopeUnknown VarScope = iota
-	VarScopeField 
+	VarScopeField
 	VarScopeLocal
+	VarScopeGlobal
 )
 
-func (v VarType) String() string {
-	return [...]string{"Unknown", "Int", "Float", "String", "DMObject", "Resource", "Prefab", "List"}[v]
+func (v VarScope) String() string {
+	return [...]string{"UnknownScope", "Field", "Local", "Global"}[v]
 }
 
-type varRepresentation struct {
-	name         string
+type VarInScope struct {
+	Name         string
 	defaultValue string
 	curValue     string
-	varType      VarType
-	varScope VarScope
+	Type         VarType
+	Scope        VarScope
 }
 
-type scopeCtxt struct {
-	curDeclFile    *cctpb.DeclarationFile
-	curDefnFile    *cctpb.DefinitionFile
+type HeaderCollection struct {
+	Headers map[string]bool
+}
+
+type DeclaredVars struct {
+	Vars map[string]VarInScope
+}
+
+type DeclaredProcs struct {
+	Procs map[string]bool
+}
+
+func (d *DeclaredProcs) Add(s string) {
+	d.Procs[s] = true
+}
+
+func NewHeaderCollection() *HeaderCollection {
+	hc := &HeaderCollection{}
+	hc.Headers = make(map[string]bool)
+	return hc
+}
+
+func NewDeclaredVars() *DeclaredVars {
+	dv := &DeclaredVars{}
+	dv.Vars = make(map[string]VarInScope)
+	return dv
+}
+
+func NewDeclaredProcs() *DeclaredProcs {
+	dv := &DeclaredProcs{}
+	dv.Procs = make(map[string]bool)
+	return dv
+}
+
+type ScopeCtxt struct {
+	CurDeclFile    *cctpb.DeclarationFile
+	CurDefnFile    *cctpb.DefinitionFile
 	curClassDecl   *cctpb.ClassDeclaration
-	curPath        *paths.Path
-	curType        *parser.DMType
-	curProc        *parser.DMProc
-	declaredVars   []varRepresentation
-	curDefnHeaders map[string]bool
-	curDeclHeaders map[string]bool
-	parentScope    *scopeCtxt
+	CurPath        *paths.Path
+	CurType        *parser.DMType
+	CurProc        *parser.DMProc
+	DeclaredVars   *DeclaredVars
+	DeclaredProcs  *DeclaredProcs
+	CurDefnHeaders *HeaderCollection
+	CurDeclHeaders *HeaderCollection
+	parentScope    *ScopeCtxt
+	currentDepth   int
 }
 
-func (s *scopeCtxt) AddScopedVar(vr varRepresentation) {
-	s.declaredVars = append(s.declaredVars, vr)
+func (s *ScopeCtxt) AddScopedVar(vr VarInScope) {
+	s.DeclaredVars.Vars[vr.Name] = vr
 }
 
-func (s *scopeCtxt) addDeclHeader(n string) {
-	s.curDeclHeaders[n] = true
+func (s *ScopeCtxt) AddDeclHeader(n string) {
+	s.CurDeclHeaders.Headers[n] = true
 }
 
-func (s *scopeCtxt) addDefnHeader(n string) {
-	s.curDefnHeaders[n] = true
+func (s *ScopeCtxt) AddDefnHeader(n string) {
+	s.CurDefnHeaders.Headers[n] = true
 }
 
-func (s *scopeCtxt) child() *scopeCtxt {
-	child := s
-	child.parentScope = s
-	child.declaredVars = nil
-
-	return child
-}
-
-func (s *scopeCtxt) VarType(name string) VarType {
-	for _, v := range s.declaredVars {
-		if v.name == name{
-			return v.varType
+func (s *ScopeCtxt) VarType(name string) VarType {
+	c := s
+	for c.HasParent() {
+		for n, v := range c.DeclaredVars.Vars {
+			if n == name {
+				return v.Type
+			}
 		}
+		c = c.parentScope
 	}
 	panic(fmt.Sprintf("asked for VarType of undefined var %v", name))
 }
 
-func (s *scopeCtxt) HasField(name string) bool {
-	for _, v := range s.declaredVars {
-		if v.name == name && v.varScope == VarScopeField {
+func (s *ScopeCtxt) HasField(name string) bool {
+	for n, v := range s.DeclaredVars.Vars {
+		if n == name && v.Scope == VarScopeField {
 			return true
 		}
 	}
 	return false
 }
 
-func (s *scopeCtxt) HasLocal(name string) bool {
-	for _, v := range s.declaredVars {
-		if v.name == name && v.varScope == VarScopeLocal {
+func (s *ScopeCtxt) HasLocal(name string) bool {
+	for n, v := range s.DeclaredVars.Vars {
+		if n == name && v.Scope == VarScopeLocal {
 			return true
 		}
 	}
@@ -105,25 +144,127 @@ func (s *scopeCtxt) HasLocal(name string) bool {
 	return false
 }
 
+func (s *ScopeCtxt) HasGlobal(name string) bool {
+	r := false
+	c := s
+	for c.HasParent() {
+		c = c.parentScope
+	}
+	for n, v := range c.DeclaredVars.Vars {
+		if n == name && v.Scope == VarScopeGlobal {
+			r = true
+		}
+	}
 
-func (s *scopeCtxt) isRoot() bool {
-	return s.curPath.IsRoot()
+	return r
 }
 
-func (s *scopeCtxt) String() string {
-	return fmt.Sprintf("ScopeContext<%v>", s.curPath)
+func (s *ScopeCtxt) HasGlobalProc(name string) bool {
+	c := s
+	for c.HasParent() {
+		c = c.parentScope
+	}
+	for n := range c.DeclaredProcs.Procs {
+		if n == name {
+			return true
+		}
+	}
+
+	return false
 }
 
-func (s *scopeCtxt) childType(p *paths.Path, t *parser.DMType) *scopeCtxt {
-	child := s
-	child.parentScope = s
-	child.declaredVars = nil
-	child.curPath = p
-	child.curType = t
+func (s *ScopeCtxt) HasParent() bool {
+	return s.parentScope != nil
+}
+
+func (s *ScopeCtxt) String() string {
+	return fmt.Sprintf("ScopeContext<%v depth=%v parent=%v proc=%v varCount=%v procCount=%v>",
+		s.CurPath, s.currentDepth, s.parentScope != nil, s.CurProc, len(s.DeclaredVars.Vars), len(s.DeclaredProcs.Procs))
+}
+
+func MakeRoot() *ScopeCtxt {
+	root := &ScopeCtxt{
+		CurPath:        paths.New("/"),
+		CurDefnHeaders: NewHeaderCollection(),
+		CurDeclHeaders: NewHeaderCollection(),
+		DeclaredVars:   NewDeclaredVars(),
+		DeclaredProcs:  NewDeclaredProcs(),
+	}
+
+	return root
+}
+
+func (s *ScopeCtxt) MakeChildPath(p *paths.Path) *ScopeCtxt {
+	child := &ScopeCtxt{
+		CurDeclFile:    s.CurDeclFile,
+		CurDefnFile:    s.CurDefnFile,
+		curClassDecl:   s.curClassDecl,
+		CurPath:        p,
+		CurType:        s.CurType,
+		CurProc:        s.CurProc,
+		CurDefnHeaders: s.CurDefnHeaders,
+		CurDeclHeaders: s.CurDeclHeaders,
+		DeclaredVars:   NewDeclaredVars(),
+		DeclaredProcs:  NewDeclaredProcs(),
+		parentScope:    s,
+		currentDepth:   s.currentDepth + 1,
+	}
 
 	return child
 }
 
-func (s *scopeCtxt) parent() *scopeCtxt {
-	return s.parentScope
+func (s *ScopeCtxt) MakeChild() *ScopeCtxt {
+	child := &ScopeCtxt{
+		CurDeclFile:    s.CurDeclFile,
+		CurDefnFile:    s.CurDefnFile,
+		curClassDecl:   s.curClassDecl,
+		CurPath:        s.CurPath,
+		CurType:        s.CurType,
+		CurProc:        s.CurProc,
+		CurDefnHeaders: s.CurDefnHeaders,
+		CurDeclHeaders: s.CurDeclHeaders,
+		DeclaredVars:   NewDeclaredVars(),
+		DeclaredProcs:  NewDeclaredProcs(),
+		parentScope:    s,
+		currentDepth:   s.currentDepth + 1,
+	}
+
+	return child
+}
+
+type Stack struct {
+	Scopes []*ScopeCtxt
+}
+
+func (s Stack) String() string {
+	return fmt.Sprintf("<ScopeStack@%p curScope=%v/%v>", &s, s.LastScope(), s.Len())
+}
+
+func NewStack() *Stack {
+	return &Stack{}
+}
+
+func (s *Stack) Len() int {
+	return len(s.Scopes)
+}
+
+func (s *Stack) LastScope() *ScopeCtxt {
+	if len(s.Scopes) == 0 {
+		return nil
+	}
+	return s.Scopes[len(s.Scopes)-1]
+}
+
+func (s *Stack) Pop() *ScopeCtxt {
+	if len(s.Scopes) == 0 {
+		return nil
+	}
+
+	result := s.Scopes[len(s.Scopes)-1]
+	s.Scopes = s.Scopes[0:len(s.Scopes)]
+	return result
+}
+
+func (s *Stack) Push(value *ScopeCtxt) {
+	s.Scopes = append(s.Scopes, value)
 }

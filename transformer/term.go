@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
-	"snowfrost.garden/donk/transpiler/paths"
 	astpb "snowfrost.garden/donk/proto/ast"
+	"snowfrost.garden/donk/transpiler/paths"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
@@ -28,7 +28,9 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 			exp := &cctpb.Identifier{
 				Id: proto.String(id),
 			}
-			if t.declaredInPathOrParents(id) {
+			if term.GetIdent() == "world" {
+				e = genericCtxtCall("world")
+			} else if t.declaredInPathOrParents(id) {
 				mae := &cctpb.MemberAccessExpression{
 					Operator: cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum(),
 					Lhs:      ctxtSrc(),
@@ -42,6 +44,14 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 					Rhs:      getObjVar(id),
 				}
 				e.Value = &cctpb.Expression_MemberAccessExpression{mae}
+			} else if t.curScope().HasGlobal(id) {
+				e = genericCtxtCall("cvar")
+				fce := e.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression()
+				addFuncExprArg(fce, &cctpb.Expression{
+					Value: &cctpb.Expression_LiteralExpression{
+						&cctpb.Literal{Value: &cctpb.Literal_StringLiteral{id}},
+					},
+				})
 			} else if term.GetIdent() == "TRUE" {
 				exp.Id = proto.String("true")
 				e.Value = &cctpb.Expression_IdentifierExpression{exp}
@@ -53,8 +63,6 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 				e = ctxtSrc()
 			} else if term.GetIdent() == "usr" {
 				e = ctxtUsr()
-			} else if term.GetIdent() == "world" {
-				e = genericCtxtCall("world")
 			} else {
 				e.Value = &cctpb.Expression_IdentifierExpression{exp}
 			}
@@ -83,7 +91,7 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 
 	case term.Resource != nil:
 		{
-			t.curScope.addDefnHeader("\"donk/core/vars.h\"")
+			t.curScope().AddDefnHeader("\"donk/core/vars.h\"")
 			e = resourceId(*term.Resource)
 		}
 
@@ -103,6 +111,7 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 					addFuncInitListArg(fc, transformed...)
 				}
 			} else {
+				// TODO: This is definitely wrong
 				fc := &cctpb.FunctionCallExpression{}
 				fc.Name = &cctpb.Expression{
 					Value: &cctpb.Expression_IdentifierExpression{
@@ -126,7 +135,7 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 	case term.GetInterpString() != nil:
 		{
 			is := term.GetInterpString()
-			t.curScope.addDefnHeader("\"fmt/format.h\"")
+			t.curScope().AddDefnHeader("\"fmt/format.h\"")
 			id := &cctpb.Identifier{
 				Namespace: proto.String("fmt"),
 				Id:        proto.String("format"),
@@ -147,7 +156,7 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 			for _, collection := range is.GetCollections() {
 				if collection.GetExpr() != nil {
 					colExpr := t.walkExpression(collection.GetExpr())
-					if t.isFmtRedirected(colExpr) {
+					if !isRawLiteral(colExpr) {
 						ue := &cctpb.UnaryExpression{
 							Operator: cctpb.UnaryExpression_POINTER_INDIRECTION.Enum(),
 							Operand:  colExpr,
@@ -208,6 +217,31 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 	case term.GetExpr() != nil:
 		{
 			e = t.walkExpression(term.GetExpr())
+		}
+
+	case term.GetList() != nil:
+		{
+			fce := &cctpb.FunctionCallExpression{}
+			fce.Name = &cctpb.Expression{
+				Value: &cctpb.Expression_IdentifierExpression{
+					&cctpb.Identifier{
+						Namespace: proto.String("donk"),
+						Id:        proto.String("assoc_list_t"),
+					},
+				},
+			}
+
+			iList := &cctpb.InitializerList{}
+			
+			for _, call := range term.GetList().GetCall() {
+				iList.Args = append(iList.Args, t.walkExpression(call))
+			}
+			fce.Arguments = append(fce.Arguments, 
+				&cctpb.FunctionCallExpression_ExpressionArg{
+					Value: &cctpb.FunctionCallExpression_ExpressionArg_InitializerList{iList},
+				})
+
+			e.Value = &cctpb.Expression_FunctionCallExpression{fce}
 		}
 
 	default:

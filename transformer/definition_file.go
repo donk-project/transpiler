@@ -6,33 +6,34 @@ package transformer
 import (
 	"strings"
 
+	"snowfrost.garden/donk/transpiler/scope"
 	"github.com/golang/protobuf/proto"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
 func (t Transformer) buildDefnFile() {
-	t.curScope.curDefnFile = &cctpb.DefinitionFile{
+	t.curScope().CurDefnFile = &cctpb.DefinitionFile{
 		FileMetadata: &cctpb.FileMetadata{},
 		Preamble:     &cctpb.Preamble{},
 	}
-	t.curScope.curDefnHeaders = make(map[string]bool)
+	t.curScope().CurDefnHeaders = scope.NewHeaderCollection()
 	bName := strings.ToLower(
-		strings.TrimPrefix(t.curScope.curPath.FullyQualifiedString(), "/"))
+		strings.TrimPrefix(t.curScope().CurPath.FullyQualifiedString(), "/"))
 	incPrefix := t.includePrefix + "/"
 	if incPrefix == "/" {
 		incPrefix = ""
 	}
-	if t.curScope.curPath.IsRoot() {
-		t.curScope.curDefnFile.BaseInclude = proto.String("\"" + incPrefix + "root.h\"")
-		t.curScope.curDefnFile.FileMetadata.Filename = proto.String(strings.ToLower(
-			strings.TrimPrefix(t.curScope.curPath.ParentPath().FullyQualifiedString(), "/")) + "root.cc")
+	if t.curScope().CurPath.IsRoot() {
+		t.curScope().CurDefnFile.BaseInclude = proto.String("\"" + incPrefix + "root.h\"")
+		t.curScope().CurDefnFile.FileMetadata.Filename = proto.String(strings.ToLower(
+			strings.TrimPrefix(t.curScope().CurPath.ParentPath().FullyQualifiedString(), "/")) + "root.cc")
 	} else {
-		t.curScope.curDefnFile.BaseInclude = proto.String("\"" + incPrefix + bName + ".h\"")
-		t.curScope.curDefnFile.FileMetadata.Filename = proto.String(bName + ".cc")
+		t.curScope().CurDefnFile.BaseInclude = proto.String("\"" + incPrefix + bName + ".h\"")
+		t.curScope().CurDefnFile.FileMetadata.Filename = proto.String(bName + ".cc")
 	}
 
 	t.lastFileId++
 
-	t.curScope.curDefnFile.FileMetadata.FileId = proto.Uint32(t.lastFileId)
-	t.curScope.curDefnFile.FileMetadata.SourcePath = proto.String(t.curScope.curPath.FullyQualifiedString())
+	t.curScope().CurDefnFile.FileMetadata.FileId = proto.Uint32(t.lastFileId)
+	t.curScope().CurDefnFile.FileMetadata.SourcePath = proto.String(t.curScope().CurPath.FullyQualifiedString())
 }

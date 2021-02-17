@@ -5,15 +5,17 @@ package transformer
 
 import (
 	"fmt"
-  _	"log"
+	_ "log"
 
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
+	"snowfrost.garden/donk/transpiler/scope"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
 const (
-	BroadcastRedirectProcName = "DONK_Broadcast"
+	BroadcastRedirectProcName    = "DONKAPI_Broadcast"
+	BroadcastLogRedirectProcName = "DONKAPI_BroadcastLog"
 )
 
 func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
@@ -30,10 +32,10 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 					isVarAccess := false
 					if isRawIdentifier(term) {
 						rId := rawIdentifier(term)
-						if t.curScope.HasField(rId) {
+						if t.curScope().HasField(rId) {
 							isVarAccess = true
-						} else if t.curScope.HasLocal(rId) {
-							if t.curScope.VarType(rId) == VarTypeDMObject {
+						} else if t.curScope().HasLocal(rId) {
+							if t.curScope().VarType(rId) == scope.VarTypeDMObject {
 								isVarAccess = true
 							}
 						}
@@ -49,9 +51,13 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 							if field.GetIndexKind() == astpb.IndexKind_INDEX_KIND_DOT {
 								curFollow.Operator = cctpb.MemberAccessExpression_MEMBER_OF_OBJECT.Enum()
 								if field.S != nil {
-									if isVarAccess || proto.Equal(term, ctxtSrc()) || proto.Equal(term, ctxtUsr()) {
+									if isVarAccess || proto.Equal(term, ctxtSrc()) || proto.Equal(term, ctxtUsr()) || proto.Equal(term, genericCtxtCall("world")) {
 										curFollow.Operator = cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum()
-										curFollow.Rhs = getObjVar(field.GetS())
+										if field.GetS() == "log" {
+											curFollow.Rhs = getObjFunc(BroadcastLogRedirectProcName)
+										} else {
+											curFollow.Rhs = getObjVar(field.GetS())
+										}
 									} else {
 										curFollow.Rhs = &cctpb.Expression{
 											Value: &cctpb.Expression_IdentifierExpression{
@@ -132,13 +138,25 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 					lhs := t.walkExpression(e.GetBinaryOp().GetLhs())
 					rhs := t.walkExpression(e.GetBinaryOp().GetRhs())
 
-					isWorld := proto.Equal(lhs, genericCtxtCall("world"))
+					wrld := genericCtxtCall("world")
+					isWorld := proto.Equal(lhs, wrld)
+					wrldLog := &cctpb.Expression{
+						Value: &cctpb.Expression_MemberAccessExpression{
+							&cctpb.MemberAccessExpression{
+								Operator: cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum(),
+								Lhs:      wrld,
+								Rhs:      getObjFunc(BroadcastLogRedirectProcName),
+							},
+						},
+					}
+
 					isView := proto.Equal(lhs, coreProcCall("view"))
+					isWorldLog := proto.Equal(lhs, wrldLog)
 					isBitwiseLShift := expr.GetArithmeticExpression().GetOperator() == cctpb.ArithmeticExpression_BITWISE_LSHIFT
 
 					// TODO: Also world.log, or any list containing mobs, or any mob
 					if (isView || isWorld) && isBitwiseLShift {
-						// rewrite ctxt.world() << foo --> ctxt.world()->p("DONK_Broadcast")
+						// rewrite ctxt.world() << foo --> ctxt.world()->p("DONK_Broadcast", foo)
 						mae := &cctpb.MemberAccessExpression{
 							Operator: cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum(),
 							Lhs:      lhs,
@@ -173,6 +191,13 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 						return &cctpb.Expression{
 							Value: &cctpb.Expression_MemberAccessExpression{mae},
 						}
+					} else if isWorldLog && isBitwiseLShift {
+						// rewrite ctxt.world()->v("log") << foo --> ctxt.world()->p("DONK_BroadcastLog", foo)
+						fce := lhs.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression()
+						fce.Arguments = append(fce.Arguments, &cctpb.FunctionCallExpression_ExpressionArg{
+							Value: &cctpb.FunctionCallExpression_ExpressionArg_Expression{rhs},
+						})
+						return lhs
 					}
 
 					expr.GetArithmeticExpression().Lhs = lhs
@@ -205,7 +230,7 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 			operator := ConvertAssignOp(e.GetAssignOp().GetOp())
 			lhs := t.walkExpression(e.GetAssignOp().GetLhs())
 			rhs := t.walkExpression(e.GetAssignOp().GetRhs())
-			if isVarAssignFromPtr(lhs) {
+			if t.isVarAssignFromPtr(lhs) {
 				assignExpr := &cctpb.AssignmentExpression{
 					Operator: &operator,
 					Rhs:      rhs,
@@ -223,6 +248,32 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 					Value: &cctpb.Expression_AssignmentExpression{assignExpr},
 				}
 			}
+			if isRawIdentifier(lhs) && t.curScope().VarType(rawIdentifier(lhs)) == scope.VarTypeInt {
+				fce := &cctpb.Expression{
+					Value: &cctpb.Expression_FunctionCallExpression{
+						&cctpb.FunctionCallExpression{
+							Name: &cctpb.Expression{
+								Value: &cctpb.Expression_IdentifierExpression{
+									&cctpb.Identifier{
+										Id: proto.String("get_int"),
+									},
+								},
+							},
+						},
+					},
+				}
+
+				rhs = &cctpb.Expression{
+					Value: &cctpb.Expression_MemberAccessExpression{
+						&cctpb.MemberAccessExpression{
+							Operator: cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum(),
+							Lhs:      rhs,
+							Rhs:      fce,
+						},
+					},
+				}
+			}
+
 			assignExpr := &cctpb.AssignmentExpression{
 				Operator: &operator,
 				Lhs:      lhs,

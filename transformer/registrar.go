@@ -15,8 +15,8 @@ func (t *Transformer) generateRegistrationFunction(namespace string) *cctpb.Func
 	blockDefn := &cctpb.BlockDefinition{}
 	var stmts []*cctpb.Statement
 
-	procs := t.curScope.curType.Procs
-	vars := t.curScope.curType.Vars
+	procs := t.curScope().CurType.Procs
+	vars := t.curScope().CurType.Vars
 
 	for _, proc := range procs {
 		if t.shouldEmitProc(proc) {
@@ -122,7 +122,7 @@ func (t *Transformer) generateRegistrationFunction(namespace string) *cctpb.Func
 				if v.Proto.GetValue().GetExpression() != nil {
 					term := v.Proto.GetValue().GetExpression().GetBase().GetTerm()
 					if term.StringT != nil {
-						t.curScope.addDefnHeader("<string>")
+						t.curScope().AddDefnHeader("<string>")
 						cInit.Other = stdStringCtor(term.GetStringT())
 					} else {
 						cInit.Other = t.walkExpression(v.Proto.GetValue().GetExpression())

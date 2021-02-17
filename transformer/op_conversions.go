@@ -62,7 +62,7 @@ func (t *Transformer) BinaryOpToExpr(op astpb.BinaryOp) *cctpb.Expression {
 	case op == astpb.BinaryOp_BINARYOP_POW:
 		{
 			// No native power call so this become's <cmath>'s std::pow
-			t.curScope.addDefnHeader("<cmath>")
+			t.curScope().AddDefnHeader("<cmath>")
 			id := &cctpb.Identifier{
 				Namespace: proto.String("std"),
 				Id:        proto.String("pow"),

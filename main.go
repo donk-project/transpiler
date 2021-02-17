@@ -43,7 +43,6 @@ func main() {
 		panic("No --project_name specified")
 	}
 
-
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {

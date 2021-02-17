@@ -4,6 +4,7 @@
 package transformer
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 
@@ -13,13 +14,15 @@ import (
 	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/parser"
 	"snowfrost.garden/donk/transpiler/paths"
+	"snowfrost.garden/donk/transpiler/scope"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
 type Transformer struct {
 	coreNamespace string
 	coreParser    *parser.Parser
-	curScope      *scopeCtxt
+	scopeStack    *scope.Stack
+	// curScope().     *scope.ScopeCtxt
 	includePrefix string
 	lastFileId    uint32
 	parser        *parser.Parser
@@ -37,6 +40,10 @@ func (t Transformer) CoreNamespace() string {
 
 func (t Transformer) isCoreGen() bool {
 	return t.coreNamespace == "donk"
+}
+
+func (t Transformer) curScope() *scope.ScopeCtxt {
+	return t.scopeStack.LastScope()
 }
 
 func New(p *parser.Parser, cn string, ip string) *Transformer {
@@ -61,42 +68,75 @@ func New(p *parser.Parser, cn string, ip string) *Transformer {
 	}
 	t.coreParser = parser.NewParser(g)
 	t.lastFileId = 1
+	t.scopeStack = scope.NewStack()
 
 	return t
+}
+
+func (t Transformer) PushScope() {
+	t.scopeStack.Push(t.curScope().MakeChild())
+}
+
+func (t Transformer) PushScopePath(p *paths.Path) {
+	t.scopeStack.Push(t.curScope().MakeChildPath(p))
+}
+
+func (t Transformer) PopScope() {
+	if t.scopeStack.Len() == 0 {
+		panic(fmt.Sprintf("tried to pop top-most scope context %v", t.curScope()))
+	}
+	t.scopeStack.Pop()
 }
 
 func (t Transformer) BeginTransform() {
 	if t.walkPerformed {
 		log.Panic("transformer has already walked graph, cannot reuse")
 	}
+
 	t.walkPerformed = true
-	t.curScope = &scopeCtxt{
-		curPath: paths.New("/"),
-	}
+	t.scopeStack.Push(scope.MakeRoot())
+
+	root := t.parser.TypesByPath[*paths.New("/")]
+	t.scan(*paths.New("/"), root)
 
 	for path, typ := range t.parser.TypesByPath {
-		t.curScope = t.curScope.childType(&path, typ)
-		t.scan(path)
-		t.curScope = t.curScope.parent()
+		if path.IsRoot() {
+			continue
+		}
+		t.PushScopePath(&path)
+		t.curScope().CurType = typ
+		t.scan(path, typ)
+		t.PopScope()
 	}
 }
 
-func (t Transformer) makeVarRepresentation(v *parser.DMVar) *varRepresentation {
-	vr := &varRepresentation{
-		name: v.Name,
+func (t Transformer) makeVarRepresentation(v *parser.DMVar) *scope.VarInScope {
+	vr := &scope.VarInScope{
+		Name: v.Name,
 	}
 
 	return vr
 }
 
-func (t Transformer) scan(p paths.Path) {
+func (t Transformer) scan(p paths.Path, typ *parser.DMType) {
+	t.curScope().CurType = typ
+
+	for _, dmvar := range t.curScope().CurType.Vars {
+		vr := t.makeVarRepresentation(dmvar)
+		if !t.curScope().HasParent() {
+			vr.Scope = scope.VarScopeGlobal
+		} else {
+			vr.Scope = scope.VarScopeField
+		}
+		t.curScope().AddScopedVar(*vr)
+	}
+
+	for _, dmproc := range t.curScope().CurType.Procs {
+		t.curScope().DeclaredProcs.Add(dmproc.Name)
+	}
+
 	t.buildDeclFile()
 	t.buildDefnFile()
-
-	for _, dmvar := range t.curScope.curType.Vars {
-		t.curScope.declaredVars = append(
-			t.curScope.declaredVars, *t.makeVarRepresentation(dmvar))
-	}
 
 	ns := proto.String(t.coreNamespace + "::" + p.AsNamespace())
 	if p.IsRoot() {
@@ -110,12 +150,12 @@ func (t Transformer) scan(p paths.Path) {
 		Namespace: ns,
 	}
 
-	if t.isCoreGen() && !t.curScope.curPath.IsRoot() {
+	if t.isCoreGen() && !t.curScope().CurPath.IsRoot() {
 		nsDecl.ClassDeclarations = append(nsDecl.ClassDeclarations, t.buildCoretypeDecl())
 	}
 
 	procCount := 0
-	for _, dmproc := range t.curScope.curType.Procs {
+	for _, dmproc := range t.curScope().CurType.Procs {
 		if t.shouldEmitProc(dmproc) {
 			funcDecl := t.makeFuncDecl(dmproc)
 			nsDecl.FunctionDeclarations = append(nsDecl.FunctionDeclarations, funcDecl)
@@ -126,46 +166,26 @@ func (t Transformer) scan(p paths.Path) {
 		}
 	}
 
-	if t.isCoreGen() && t.curScope.curPath.Equals("/world") {
-		procCount += 1
-		fd := &cctpb.FunctionDeclaration{
-			Name: proto.String(BroadcastRedirectProcName),
-			ReturnType: &cctpb.CppType{
-				PType: cctpb.CppType_NONE.Enum(),
-				Name:  proto.String("void"),
-			},
-		}
+	if t.isCoreGen() && t.curScope().CurPath.Equals("/world") {
+		procCount += 2
+		broadcast := makeApiFuncDecl(BroadcastRedirectProcName)
+		broadcastLog := makeApiFuncDecl(BroadcastLogRedirectProcName)
 
-		fd.Arguments = append(fd.Arguments,
-			&cctpb.FunctionArgument{
-				Name: proto.String("ctxt"),
-				CppType: &cctpb.CppType{
-					PType: cctpb.CppType_REFERENCE.Enum(),
-					Name:  proto.String("donk::proc_ctxt_t"),
-				},
-			})
-
-		fd.Arguments = append(fd.Arguments,
-			&cctpb.FunctionArgument{
-				Name: proto.String("args"),
-				CppType: &cctpb.CppType{
-					PType: cctpb.CppType_REFERENCE.Enum(),
-					Name:  proto.String("donk::proc_args_t"),
-				},
-			})
-
-		nsDecl.FunctionDeclarations = append(nsDecl.FunctionDeclarations, fd)
-		broadcastFunctionDefn := &cctpb.FunctionDefinition{
-			Declaration: fd,
-		}
-		nsDefn.FunctionDefinitions = append(nsDefn.FunctionDefinitions, broadcastFunctionDefn)
+		nsDecl.FunctionDeclarations = append(nsDecl.FunctionDeclarations, broadcast)
+		nsDecl.FunctionDeclarations = append(nsDecl.FunctionDeclarations, broadcastLog)
+		nsDefn.FunctionDefinitions = append(nsDefn.FunctionDefinitions, &cctpb.FunctionDefinition{
+			Declaration: broadcast,
+		})
+		nsDefn.FunctionDefinitions = append(nsDefn.FunctionDefinitions, &cctpb.FunctionDefinition{
+			Declaration: broadcastLog,
+		})
 	}
 
 	if procCount > 0 {
-		t.curScope.addDeclHeader("\"donk/core/procs.h\"")
+		t.curScope().AddDeclHeader("\"donk/core/procs.h\"")
 	}
 
-	if t.isCoreGen() && !t.curScope.curPath.IsRoot() {
+	if t.isCoreGen() && !t.curScope().CurPath.IsRoot() {
 		nsDefn.Constructors = append(nsDefn.Constructors, t.generateCoreConstructor())
 		registerFd := &cctpb.FunctionDeclaration{
 			Name: proto.String("InternalCoreRegister"),
@@ -174,15 +194,15 @@ func (t Transformer) scan(p paths.Path) {
 				Name:  proto.String("void"),
 			},
 			MemberOf: &cctpb.Identifier{
-				Id: proto.String(t.curScope.curPath.Basename + "_coretype"),
+				Id: proto.String(t.curScope().CurPath.Basename + "_coretype"),
 			},
 		}
 		internalCoreReg := t.generateInternalCoreRegister(*ns)
 		internalCoreReg.Declaration = registerFd
 		nsDefn.FunctionDefinitions = append(nsDefn.FunctionDefinitions, internalCoreReg)
 	} else {
-		t.curScope.addDeclHeader("\"donk/core/iota.h\"")
-		t.curScope.addDefnHeader("\"donk/core/iota.h\"")
+		t.curScope().AddDeclHeader("\"donk/core/iota.h\"")
+		t.curScope().AddDefnHeader("\"donk/core/iota.h\"")
 		registerFd := &cctpb.FunctionDeclaration{
 			Name: proto.String("Register"),
 			ReturnType: &cctpb.CppType{
@@ -206,44 +226,41 @@ func (t Transformer) scan(p paths.Path) {
 		nsDefn.FunctionDefinitions = append(nsDefn.FunctionDefinitions, registerFuncDefn)
 	}
 
-	t.curScope.addDeclHeader("\"donk/core/procs.h\"")
-	t.curScope.addDefnHeader("\"donk/core/procs.h\"")
+	t.curScope().AddDeclHeader("\"donk/core/procs.h\"")
+	t.curScope().AddDefnHeader("\"donk/core/procs.h\"")
 
-	t.curScope.curDeclFile.NamespacedDeclarations = append(
-		t.curScope.curDeclFile.NamespacedDeclarations, nsDecl)
+	t.curScope().CurDeclFile.NamespacedDeclarations = append(
+		t.curScope().CurDeclFile.NamespacedDeclarations, nsDecl)
 
-	t.curScope.curDefnFile.NamespacedDefinitions = append(
-		t.curScope.curDefnFile.NamespacedDefinitions, nsDefn)
+	t.curScope().CurDefnFile.NamespacedDefinitions = append(
+		t.curScope().CurDefnFile.NamespacedDefinitions, nsDefn)
 
-	t.project.DeclarationFiles = append(t.project.DeclarationFiles, t.curScope.curDeclFile)
-	t.project.DefinitionFiles = append(t.project.DefinitionFiles, t.curScope.curDefnFile)
+	t.project.DeclarationFiles = append(t.project.DeclarationFiles, t.curScope().CurDeclFile)
+	t.project.DefinitionFiles = append(t.project.DefinitionFiles, t.curScope().CurDefnFile)
 
-	for hdr := range t.curScope.curDeclHeaders {
-		t.curScope.curDeclFile.Preamble.Headers = append(
-			t.curScope.curDeclFile.Preamble.Headers, hdr)
+	for hdr := range t.curScope().CurDeclHeaders.Headers {
+		t.curScope().CurDeclFile.Preamble.Headers = append(
+			t.curScope().CurDeclFile.Preamble.Headers, hdr)
 	}
-	for hdr := range t.curScope.curDefnHeaders {
-		t.curScope.curDefnFile.Preamble.Headers = append(
-			t.curScope.curDefnFile.Preamble.Headers, hdr)
+	for hdr := range t.curScope().CurDefnHeaders.Headers {
+		t.curScope().CurDefnFile.Preamble.Headers = append(
+			t.curScope().CurDefnFile.Preamble.Headers, hdr)
 	}
 }
 
 func (t Transformer) makeFuncDefn(p *parser.DMProc) *cctpb.FunctionDefinition {
-	t.curScope = t.curScope.child()
-	t.curScope.curProc = p
+	t.PushScope()
+	t.curScope().CurProc = p
 
 	proc := p.Proto.Value[len(p.Proto.Value)-1]
 	funcDefn := &cctpb.FunctionDefinition{}
 	funcDefn.BlockDefinition = t.walkBlock(proc.GetCode().GetPresent())
 
-	t.curScope = t.curScope.parentScope
+	t.PopScope()
 	return funcDefn
 }
 
 func (t Transformer) makeFuncDecl(p *parser.DMProc) *cctpb.FunctionDeclaration {
-	t.curScope = t.curScope.child()
-	t.curScope.curProc = p
-
 	fd := &cctpb.FunctionDeclaration{
 		Name: proto.String(p.EmitName()),
 		ReturnType: &cctpb.CppType{
@@ -270,7 +287,6 @@ func (t Transformer) makeFuncDecl(p *parser.DMProc) *cctpb.FunctionDeclaration {
 			},
 		})
 
-	t.curScope = t.curScope.parentScope
 	return fd
 }
 
@@ -283,11 +299,11 @@ func (t Transformer) walkBlock(block *astpb.Block) *cctpb.BlockDefinition {
 }
 
 func (t Transformer) declaredInPathOrParents(name string) bool {
-	if t.curScope.HasField(name) {
+	if t.curScope().HasField(name) {
 		return true
 	}
 
-	p := t.curScope.curPath.ParentPath()
+	p := t.curScope().CurPath.ParentPath()
 	for !p.IsRoot() {
 		if _, ok := t.parser.VarsByPath[*p.Child(name)]; ok {
 			return true
@@ -302,5 +318,5 @@ func (t Transformer) declaredInPathOrParents(name string) bool {
 }
 
 func (t Transformer) passedAsArg(name string) bool {
-	return t.curScope.curProc.HasArg(name)
+	return t.curScope().CurProc.HasArg(name)
 }

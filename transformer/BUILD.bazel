@@ -6,6 +6,17 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 package(default_visibility = ["@donk_transpiler//:pkg"])
 
 go_library(
+    name = "scope",
+    srcs = ["scope.go"],
+    importpath = "snowfrost.garden/donk/transpiler/scope",
+    deps = [
+        "@donk_transpiler//:paths",
+        "@donk_transpiler//parser",
+        "@vasker//:cc_grammar_go_proto",
+    ],
+)
+
+go_library(
     name = "transformer",
     srcs = [
         "constant.go",
@@ -18,13 +29,13 @@ go_library(
         "predicates.go",
         "prefab.go",
         "registrar.go",
-        "scope.go",
         "statement.go",
         "term.go",
         "transformer.go",
     ],
     importpath = "snowfrost.garden/donk/transpiler/transformer",
     deps = [
+        ":scope",
         "@com_github_golang_protobuf//proto:go_default_library",
         "@donk_transpiler//:ast_go_proto",
         "@donk_transpiler//:paths",

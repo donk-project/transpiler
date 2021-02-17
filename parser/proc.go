@@ -13,7 +13,7 @@ import (
 )
 
 func (p *DMProc) String() string {
-	return fmt.Sprintf("Proc<%v %v>", p.Type.Path, p.Name)
+	return fmt.Sprintf("Proc<%v%v>", p.Type.Path.FullyQualifiedString(), p.Name)
 }
 
 type DMProc struct {

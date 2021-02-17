@@ -15,18 +15,31 @@ var UNARY_OP_FORMATTERS = map[cctpb.UnaryExpression_Operator]string{
 	cctpb.UnaryExpression_POINTER_INDIRECTION: "*(%v)",
 }
 
-var ARITHMETIC_OP_FORMATTERS = map[cctpb.ArithmeticExpression_Operator]string{
-	cctpb.ArithmeticExpression_ADDITION:       "%v + %v",
-	cctpb.ArithmeticExpression_SUBTRACTION:    "%v - %v",
-	cctpb.ArithmeticExpression_MULTIPLICATION: "%v * %v",
-	cctpb.ArithmeticExpression_DIVISION:       "%v / %v",
-	cctpb.ArithmeticExpression_MODULO:         "%v %% %v",
-	cctpb.ArithmeticExpression_BITWISE_AND:    "%v & %v",
-	cctpb.ArithmeticExpression_BITWISE_OR:     "%v | %v",
-	cctpb.ArithmeticExpression_BITWISE_XOR:    "%v ^ %v",
-	cctpb.ArithmeticExpression_BITWISE_LSHIFT: "%v << %v",
-	cctpb.ArithmeticExpression_BITWISE_RSHIFT: "%v >> %v",
-}
+// var ARITHMETIC_OP_FORMATTERS = map[cctpb.ArithmeticExpression_Operator]string{
+// 	cctpb.ArithmeticExpression_ADDITION:       "%v + %v",
+// 	cctpb.ArithmeticExpression_SUBTRACTION:    "%v - %v",
+// 	cctpb.ArithmeticExpression_MULTIPLICATION: "%v * %v",
+// 	cctpb.ArithmeticExpression_DIVISION:       "%v / %v",
+// 	cctpb.ArithmeticExpression_MODULO:         "%v %% %v",
+// 	cctpb.ArithmeticExpression_BITWISE_AND:    "%v & %v",
+// 	cctpb.ArithmeticExpression_BITWISE_OR:     "%v | %v",
+// 	cctpb.ArithmeticExpression_BITWISE_XOR:    "%v ^ %v",
+// 	cctpb.ArithmeticExpression_BITWISE_LSHIFT: "%v << %v",
+// 	cctpb.ArithmeticExpression_BITWISE_RSHIFT: "%v >> %v",
+// }
+
+ var ARITHMETIC_OP_FORMATTERS = map[cctpb.ArithmeticExpression_Operator]string{
+ 	cctpb.ArithmeticExpression_ADDITION:       "%v->operator+(%v)",
+ 	cctpb.ArithmeticExpression_SUBTRACTION:    "%v->operator-(%v)",
+ 	cctpb.ArithmeticExpression_MULTIPLICATION: "%v->operator*(%v)",
+ 	cctpb.ArithmeticExpression_DIVISION:       "%v->operator/(%v)",
+ 	cctpb.ArithmeticExpression_MODULO:         "%v->operator%%(%v)",
+ 	cctpb.ArithmeticExpression_BITWISE_AND:    "%v->operator&(%v)",
+ 	cctpb.ArithmeticExpression_BITWISE_OR:     "%v->operator|(%v)",
+ 	cctpb.ArithmeticExpression_BITWISE_XOR:    "%v->operator^(%v)",
+ 	cctpb.ArithmeticExpression_BITWISE_LSHIFT: "%v->operator<<(%v)",
+ 	cctpb.ArithmeticExpression_BITWISE_RSHIFT: "%v->operator>>(%v)",
+ }
 
 var ASSIGNMENT_OP_FORMATTERS = map[cctpb.AssignmentExpression_Operator]string{
 	cctpb.AssignmentExpression_SIMPLE:         "%v = %v",
@@ -118,4 +131,8 @@ func printBaseSpecifiers(bss []*cctpb.BaseSpecifier) string {
 			printIdentifier(bs.GetClassOrDecltype())))
 	}
 	return strings.Join(specifiers, ", ")
+}
+
+func compoundStatementCount(s *cctpb.Statement) int {
+	return len(s.GetCompoundStatement().GetStatements())
 }
