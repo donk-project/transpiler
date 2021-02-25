@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	astpb "snowfrost.garden/donk/proto/ast"
-	cctpb "snowfrost.garden/vasker/cc_grammar"
 	"snowfrost.garden/donk/transpiler/paths"
+	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
 func (t *Transformer) walkPrefab(p *astpb.Prefab) *cctpb.Expression {

@@ -4,12 +4,11 @@
 package writer
 
 import (
-	"text/template"
-
 	"os"
 	"path/filepath"
-	"strings"
 	"sort"
+	"strings"
+	"text/template"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"snowfrost.garden/donk/transpiler/paths"
@@ -43,7 +42,7 @@ func New(project *cctpb.Project, outputPath string) *Writer {
 		"printBaseSpecifiers":      printBaseSpecifiers,
 		"printMemberSpecifier":     writer.printMemberSpecifier,
 		"printFunctionDeclaration": writer.printFunctionDeclaration,
-		"printConstructor": writer.printConstructor,
+		"printConstructor":         writer.printConstructor,
 	}).ParseGlob(pattern)
 	if err != nil {
 		panic(err)
@@ -52,17 +51,17 @@ func New(project *cctpb.Project, outputPath string) *Writer {
 	return &writer
 }
 
-func makeSortHeaders(headers []string) func(a, b int)bool {
+func makeSortHeaders(headers []string) func(a, b int) bool {
 	return func(a, b int) bool {
 		aS := headers[a]
 		bS := headers[b]
-	if strings.HasPrefix(aS, "<") && !strings.HasPrefix(bS, "<") {
-		return true
-	}
-	if strings.HasPrefix(bS, "<") && !strings.HasPrefix(aS, "<") {
-		return false 
-	}
-	return aS < bS
+		if strings.HasPrefix(aS, "<") && !strings.HasPrefix(bS, "<") {
+			return true
+		}
+		if strings.HasPrefix(bS, "<") && !strings.HasPrefix(aS, "<") {
+			return false
+		}
+		return aS < bS
 	}
 }
 
@@ -73,9 +72,9 @@ func (w *Writer) WriteOutput() {
 	}
 
 	for _, declFile := range w.project.GetDeclarationFiles() {
-		sort.Slice(declFile.GetPreamble().GetHeaders(), 
+		sort.Slice(declFile.GetPreamble().GetHeaders(),
 			makeSortHeaders(declFile.GetPreamble().GetHeaders()))
-		
+
 		sp := paths.New(declFile.GetFileMetadata().GetSourcePath())
 		dir := abs + sp.ParentPath().FullyQualifiedString()
 		os.MkdirAll(dir, 0755)
@@ -91,7 +90,7 @@ func (w *Writer) WriteOutput() {
 	}
 
 	for _, defnFile := range w.project.GetDefinitionFiles() {
-		sort.Slice(defnFile.GetPreamble().GetHeaders(), 
+		sort.Slice(defnFile.GetPreamble().GetHeaders(),
 			makeSortHeaders(defnFile.GetPreamble().GetHeaders()))
 		sp := paths.New(defnFile.GetFileMetadata().GetSourcePath())
 		dir := abs + sp.ParentPath().FullyQualifiedString()

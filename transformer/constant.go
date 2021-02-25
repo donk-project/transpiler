@@ -5,10 +5,12 @@ package transformer
 
 import (
 	"fmt"
+
 	"github.com/golang/protobuf/proto"
 
 	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/paths"
+	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
@@ -17,7 +19,7 @@ func (t Transformer) walkConstant(c *astpb.Constant) *cctpb.Expression {
 	case c.StringConstant != nil:
 		{
 			t.curScope().AddDefnHeader("<string>")
-			return stdStringCtor(c.GetStringConstant())
+			return vsk.StdStringCtor(c.GetStringConstant())
 		}
 	case c.Resource != nil:
 		{
@@ -25,15 +27,7 @@ func (t Transformer) walkConstant(c *astpb.Constant) *cctpb.Expression {
 		}
 	case c.Int != nil:
 		{
-			return &cctpb.Expression{
-				Value: &cctpb.Expression_LiteralExpression{
-					&cctpb.Literal{
-						Value: &cctpb.Literal_IntegerLiteral{
-							int64(c.GetInt()),
-						},
-					},
-				},
-			}
+			return vsk.IntLiteralExpr(c.GetInt())
 		}
 	case c.GetPrefab() != nil:
 		{

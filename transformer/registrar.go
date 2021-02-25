@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
+	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
@@ -20,49 +21,17 @@ func (t *Transformer) generateRegistrationFunction(namespace string) *cctpb.Func
 
 	for _, proc := range procs {
 		if t.shouldEmitProc(proc) {
-			mae := &cctpb.MemberAccessExpression{
-				Operator: cctpb.MemberAccessExpression_MEMBER_OF_OBJECT.Enum(),
-				Lhs: &cctpb.Expression{
-					Value: &cctpb.Expression_IdentifierExpression{
-						&cctpb.Identifier{
-							Id: proto.String("iota"),
-						},
-					},
-				},
-				Rhs: &cctpb.Expression{
-					Value: &cctpb.Expression_IdentifierExpression{
-						&cctpb.Identifier{
-							Id: proto.String("RegisterProc"),
-						},
-					},
-				},
-			}
+			mae := vsk.ObjMember(
+				vsk.StringIdExpr("iota"),
+				vsk.StringIdExpr("RegisterProc"))
 
-			fce := &cctpb.FunctionCallExpression{
-				Name: &cctpb.Expression{
-					Value: &cctpb.Expression_MemberAccessExpression{mae},
-				},
-			}
+			fce := &cctpb.FunctionCallExpression{Name: mae}
 
-			addFuncExprArg(fce, &cctpb.Expression{
-				Value: &cctpb.Expression_LiteralExpression{
-					&cctpb.Literal{
-						// Using proc.Name here and proc.EmitName() below maps e.g.
-						// the proc "icon" to "icon_", so we don't have to try and
-						// guess what proc names should be mangled in calling code
-						Value: &cctpb.Literal_StringLiteral{proc.Name},
-					},
-				},
-			})
-
-			addFuncExprArg(fce, &cctpb.Expression{
-				Value: &cctpb.Expression_IdentifierExpression{
-					&cctpb.Identifier{
-						Namespace: proto.String(namespace),
-						Id:        proto.String(proc.EmitName()),
-					},
-				},
-			})
+			// Using proc.Name here and proc.EmitName() below maps e.g.
+			// the proc "icon" to "icon_", so we don't have to try and
+			// guess what proc names should be mangled in calling code
+			vsk.AddFuncArg(fce, vsk.StringLiteralExpr(proc.Name))
+			vsk.AddFuncArg(fce, vsk.IdExpr(vsk.NsId(namespace, proc.EmitName())))
 
 			stmts = append(stmts, &cctpb.Statement{
 				Value: &cctpb.Statement_ExpressionStatement{
@@ -76,54 +45,26 @@ func (t *Transformer) generateRegistrationFunction(namespace string) *cctpb.Func
 
 	for _, v := range vars {
 		if t.shouldEmitVar(v) {
-			mae := &cctpb.MemberAccessExpression{
-				Operator: cctpb.MemberAccessExpression_MEMBER_OF_OBJECT.Enum(),
-				Lhs: &cctpb.Expression{
-					Value: &cctpb.Expression_IdentifierExpression{
-						&cctpb.Identifier{
-							Id: proto.String("iota"),
-						},
-					},
-				},
-				Rhs: &cctpb.Expression{
-					Value: &cctpb.Expression_IdentifierExpression{
-						&cctpb.Identifier{
-							Id: proto.String("RegisterVar"),
-						},
-					},
-				},
-			}
+			mae := vsk.ObjMember(
+				vsk.StringIdExpr("iota"),
+				vsk.StringIdExpr("RegisterVar"))
 
-			fce := &cctpb.FunctionCallExpression{
-				Name: &cctpb.Expression{
-					Value: &cctpb.Expression_MemberAccessExpression{mae},
-				},
-			}
+			fce := &cctpb.FunctionCallExpression{Name: mae}
 
-			addFuncExprArg(fce, &cctpb.Expression{
-				Value: &cctpb.Expression_LiteralExpression{
-					&cctpb.Literal{
-						Value: &cctpb.Literal_StringLiteral{v.VarName()},
-					},
-				},
-			})
+			vsk.AddFuncArg(fce, vsk.StringLiteralExpr(v.VarName()))
 
 			if v.HasStaticValue() {
 				simplDecl := &cctpb.SimpleDeclaration{}
 
-				typ := &cctpb.Identifier{
-					Namespace: proto.String("donk"),
-					Id:        proto.String("var_t"),
-				}
-				id := &cctpb.Identifier{
-					Id: proto.String(fmt.Sprintf("donk_value_var__%v", v.VarName())),
-				}
+				typ := vsk.NsId("donk", "var_t")
+				id := vsk.Id(fmt.Sprintf("donk_value_var__%v", v.VarName()))
+
 				cInit := &cctpb.CopyInitializer{}
 				if v.Proto.GetValue().GetExpression() != nil {
 					term := v.Proto.GetValue().GetExpression().GetBase().GetTerm()
 					if term.StringT != nil {
 						t.curScope().AddDefnHeader("<string>")
-						cInit.Other = stdStringCtor(term.GetStringT())
+						cInit.Other = vsk.StdStringCtor(term.GetStringT())
 					} else {
 						cInit.Other = t.walkExpression(v.Proto.GetValue().GetExpression())
 					}
@@ -165,7 +106,7 @@ func (t *Transformer) generateRegistrationFunction(namespace string) *cctpb.Func
 
 				stmts = append(stmts, stmt)
 
-				addFuncExprArg(fce, &cctpb.Expression{
+				vsk.AddFuncArg(fce, &cctpb.Expression{
 					Value: &cctpb.Expression_IdentifierExpression{id},
 				})
 			}

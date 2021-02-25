@@ -5,7 +5,9 @@ package transformer
 
 import (
 	"fmt"
+
 	"github.com/golang/protobuf/proto"
+	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
@@ -79,6 +81,7 @@ func (t Transformer) buildCoretypeDecl() *cctpb.ClassDeclaration {
 		},
 	})
 
+	t.curScope().AddDeclHeader("\"donk/core/interpreter.h\"")
 	clsDecl.MemberSpecifiers = append(clsDecl.MemberSpecifiers, &cctpb.MemberSpecification{
 		Value: &cctpb.MemberSpecification_Constructor{
 			&cctpb.Constructor{
@@ -88,8 +91,8 @@ func (t Transformer) buildCoretypeDecl() *cctpb.ClassDeclaration {
 				Arguments: []*cctpb.FunctionArgument{
 					&cctpb.FunctionArgument{
 						CppType: &cctpb.CppType{
-							PType: cctpb.CppType_REFERENCE.Enum(),
-							Name:  proto.String("donk::IInterpreter"),
+							PType: cctpb.CppType_SHARED_PTR.Enum(),
+							Name:  proto.String("donk::Interpreter"),
 						},
 						Name: proto.String("interpreter"),
 					},
@@ -124,35 +127,13 @@ func (t Transformer) buildCoretypeDecl() *cctpb.ClassDeclaration {
 }
 
 func (t *Transformer) makeCoregenRegisterProcFCE(namespace string, apiName string, actualName string) *cctpb.Expression {
-	fce := &cctpb.FunctionCallExpression{
-		Name: &cctpb.Expression{
-			Value: &cctpb.Expression_IdentifierExpression{
-				&cctpb.Identifier{
-					Id: proto.String("RegisterProc"),
-				},
-			},
-		},
-	}
+	fce := &cctpb.FunctionCallExpression{Name: vsk.IdExpr(vsk.Id("RegisterProc"))}
 
-	addFuncExprArg(fce, &cctpb.Expression{
-		Value: &cctpb.Expression_LiteralExpression{
-			&cctpb.Literal{
-				// Using proc.Name here and proc.EmitName() below maps e.g.
-				// the proc "icon" to "icon_", so we don't have to try and
-				// guess what proc names should be mangled in calling code
-				Value: &cctpb.Literal_StringLiteral{apiName},
-			},
-		},
-	})
-
-	addFuncExprArg(fce, &cctpb.Expression{
-		Value: &cctpb.Expression_IdentifierExpression{
-			&cctpb.Identifier{
-				Namespace: proto.String(namespace),
-				Id:        proto.String(actualName),
-			},
-		},
-	})
+	// Using proc.Name here and proc.EmitName() below maps e.g.
+	// the proc "icon" to "icon_", so we don't have to try and
+	// guess what proc names should be mangled in calling code
+	vsk.AddFuncArg(fce, vsk.StringLiteralExpr(apiName))
+	vsk.AddFuncArg(fce, vsk.IdExpr(vsk.NsId(namespace, actualName)))
 
 	return &cctpb.Expression{
 		Value: &cctpb.Expression_FunctionCallExpression{fce},
@@ -202,7 +183,7 @@ func (t *Transformer) generateInternalCoreRegister(namespace string) *cctpb.Func
 				},
 			}
 
-			addFuncExprArg(fce, &cctpb.Expression{
+			vsk.AddFuncArg(fce, &cctpb.Expression{
 				Value: &cctpb.Expression_LiteralExpression{
 					&cctpb.Literal{
 						Value: &cctpb.Literal_StringLiteral{v.VarName()},
@@ -225,7 +206,7 @@ func (t *Transformer) generateInternalCoreRegister(namespace string) *cctpb.Func
 					term := v.Proto.GetValue().GetExpression().GetBase().GetTerm()
 					if term.StringT != nil {
 						t.curScope().AddDefnHeader("<string>")
-						cInit.Other = stdStringCtor(term.GetStringT())
+						cInit.Other = vsk.StdStringCtor(term.GetStringT())
 					} else {
 						cInit.Other = t.walkExpression(v.Proto.GetValue().GetExpression())
 					}
@@ -267,7 +248,7 @@ func (t *Transformer) generateInternalCoreRegister(namespace string) *cctpb.Func
 
 				stmts = append(stmts, stmt)
 
-				addFuncExprArg(fce, &cctpb.Expression{
+				vsk.AddFuncArg(fce, &cctpb.Expression{
 					Value: &cctpb.Expression_IdentifierExpression{id},
 				})
 			}
@@ -298,8 +279,8 @@ func (t *Transformer) generateCoreConstructor() *cctpb.Constructor {
 	}
 	c.Arguments = append(c.Arguments, &cctpb.FunctionArgument{
 		CppType: &cctpb.CppType{
-			PType: cctpb.CppType_REFERENCE.Enum(),
-			Name:  proto.String("donk::IInterpreter"),
+			PType: cctpb.CppType_SHARED_PTR.Enum(),
+			Name:  proto.String("donk::Interpreter"),
 		},
 		Name: proto.String("interpreter"),
 	})

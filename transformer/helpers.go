@@ -11,40 +11,12 @@ import (
 	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/paths"
 	"snowfrost.garden/donk/transpiler/scope"
+	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
 func genericCtxtCall(n string) *cctpb.Expression {
-	mae := &cctpb.MemberAccessExpression{
-		Operator: cctpb.MemberAccessExpression_MEMBER_OF_OBJECT.Enum(),
-	}
-
-	ctxt := &cctpb.Identifier{
-		Id: proto.String("ctxt"),
-	}
-	lhs := &cctpb.Expression{
-		Value: &cctpb.Expression_IdentifierExpression{ctxt},
-	}
-
-	src := &cctpb.Identifier{
-		Id: proto.String(n),
-	}
-	srcCall := &cctpb.FunctionCallExpression{
-		Name: &cctpb.Expression{
-			Value: &cctpb.Expression_IdentifierExpression{src},
-		},
-	}
-	rhs := &cctpb.Expression{
-		Value: &cctpb.Expression_FunctionCallExpression{srcCall},
-	}
-
-	mae.Lhs = lhs
-	mae.Rhs = rhs
-
-	expr := &cctpb.Expression{
-		Value: &cctpb.Expression_MemberAccessExpression{mae},
-	}
-	return expr
+	return vsk.ObjMember(vsk.StringIdExpr("ctxt"), vsk.FuncCall(vsk.Id(n)))
 }
 
 func ctxtMakeCall(p paths.Path) *cctpb.Expression {
@@ -70,13 +42,7 @@ func ctxtMakeCall(p paths.Path) *cctpb.Expression {
 	mkCall.Arguments = append(mkCall.Arguments,
 		&cctpb.FunctionCallExpression_ExpressionArg{
 			Value: &cctpb.FunctionCallExpression_ExpressionArg_Expression{
-				&cctpb.Expression{
-					Value: &cctpb.Expression_LiteralExpression{
-						&cctpb.Literal{
-							Value: &cctpb.Literal_StringLiteral{p.FullyQualifiedString()},
-						},
-					},
-				},
+				vsk.StringLiteralExpr(p.FullyQualifiedString()),
 			},
 		})
 	rhs := &cctpb.Expression{
@@ -107,64 +73,32 @@ func getObjVar(v string) *cctpb.Expression {
 	l := &cctpb.Literal{
 		Value: &cctpb.Literal_StringLiteral{v},
 	}
-	addFuncExprArg(fc, &cctpb.Expression{Value: &cctpb.Expression_LiteralExpression{l}})
+	vsk.AddFuncArg(fc, &cctpb.Expression{Value: &cctpb.Expression_LiteralExpression{l}})
 	return &cctpb.Expression{
 		Value: &cctpb.Expression_FunctionCallExpression{fc},
 	}
 }
 
 func getObjFunc(f string) *cctpb.Expression {
-	fc := &cctpb.FunctionCallExpression{
-		Name: &cctpb.Expression{
-			Value: &cctpb.Expression_IdentifierExpression{
-				&cctpb.Identifier{Id: proto.String("p")},
-			},
-		},
-	}
-	l := &cctpb.Literal{
-		Value: &cctpb.Literal_StringLiteral{f},
-	}
-	addFuncExprArg(fc, &cctpb.Expression{
-		Value: &cctpb.Expression_LiteralExpression{l},
-	})
+	fc := &cctpb.FunctionCallExpression{Name: vsk.IdExpr(vsk.Id("p"))}
+	vsk.AddFuncArg(fc, vsk.StringLiteralExpr(f))
 	return &cctpb.Expression{
 		Value: &cctpb.Expression_FunctionCallExpression{fc},
 	}
 }
 
-func stdStringCtor(s string) *cctpb.Expression {
-	i := &cctpb.Identifier{
-		Namespace: proto.String("std"),
-		Id:        proto.String("string"),
-	}
-	fc := &cctpb.FunctionCallExpression{
-		Name: &cctpb.Expression{
-			Value: &cctpb.Expression_IdentifierExpression{i},
-		},
-	}
-	addFuncExprArg(fc, &cctpb.Expression{
-		Value: &cctpb.Expression_LiteralExpression{&cctpb.Literal{
-			Value: &cctpb.Literal_StringLiteral{s}}},
-	})
-	return &cctpb.Expression{
-		Value: &cctpb.Expression_FunctionCallExpression{fc},
-	}
+func declareVar(name string) *cctpb.Declaration {
+	return vsk.VarDecl(name, vsk.NsId("donk", "var_t"))
 }
 
 func resourceId(resource string) *cctpb.Expression {
-	i := &cctpb.Identifier{
-		Namespace: proto.String("donk"),
-		Id:        proto.String("resource_t"),
-	}
+	i := vsk.NsId("donk", "resource_t")
 	fc := &cctpb.FunctionCallExpression{
 		Name: &cctpb.Expression{
 			Value: &cctpb.Expression_IdentifierExpression{i},
 		},
 	}
-	addFuncExprArg(fc, &cctpb.Expression{
-		Value: &cctpb.Expression_LiteralExpression{&cctpb.Literal{
-			Value: &cctpb.Literal_StringLiteral{resource}}},
-	})
+	vsk.AddFuncArg(fc, vsk.StringLiteralExpr(resource))
 	return &cctpb.Expression{
 		Value: &cctpb.Expression_FunctionCallExpression{fc},
 	}
@@ -180,7 +114,7 @@ func pathExpression(p paths.Path) *cctpb.Expression {
 			Value: &cctpb.Expression_IdentifierExpression{i},
 		},
 	}
-	addFuncExprArg(fc, &cctpb.Expression{
+	vsk.AddFuncArg(fc, &cctpb.Expression{
 		Value: &cctpb.Expression_LiteralExpression{&cctpb.Literal{
 			Value: &cctpb.Literal_StringLiteral{p.FullyQualifiedString()}}},
 	})
@@ -199,7 +133,7 @@ func prefabExpression(p paths.Path) *cctpb.Expression {
 			Value: &cctpb.Expression_IdentifierExpression{i},
 		},
 	}
-	addFuncExprArg(fc, &cctpb.Expression{
+	vsk.AddFuncArg(fc, &cctpb.Expression{
 		Value: &cctpb.Expression_LiteralExpression{&cctpb.Literal{
 			Value: &cctpb.Literal_StringLiteral{p.FullyQualifiedString()}}},
 	})
@@ -225,7 +159,7 @@ func argParam() *cctpb.Expression {
 func coreProcCall(name string) *cctpb.Expression {
 	core := genericCtxtCall("core")
 	fc := core.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression()
-	addFuncExprArg(fc, &cctpb.Expression{
+	vsk.AddFuncArg(fc, &cctpb.Expression{
 		Value: &cctpb.Expression_IdentifierExpression{&cctpb.Identifier{
 			Id: proto.String(fmt.Sprintf("\"%v\"", name)),
 		}},
@@ -276,16 +210,6 @@ func (t Transformer) isFmtRedirected(e *cctpb.Expression) bool {
 	return false
 }
 
-func wrapFuncCallExpr(e *cctpb.Expression) *cctpb.FunctionCallExpression_ExpressionArg {
-	return &cctpb.FunctionCallExpression_ExpressionArg{
-		Value: &cctpb.FunctionCallExpression_ExpressionArg_Expression{e},
-	}
-}
-
-func addFuncExprArg(fce *cctpb.FunctionCallExpression, e *cctpb.Expression) {
-	fce.Arguments = append(fce.Arguments, wrapFuncCallExpr(e))
-}
-
 func addFuncInitListArg(fce *cctpb.FunctionCallExpression, exprs ...*cctpb.Expression) {
 	iList := &cctpb.InitializerList{}
 	for _, expr := range exprs {
@@ -303,12 +227,12 @@ func wrapDeclarationInStatment(decl *cctpb.Declaration) *cctpb.Statement {
 }
 
 func (t *Transformer) declareInt(name string) *cctpb.Declaration {
-	return declareVarWithTypeIdent(name, &cctpb.Identifier{
+	return vsk.VarDecl(name, &cctpb.Identifier{
 		Id: proto.String("int"),
 	})
 }
 
-func declareVarWithTypeIdentAndInitializer(name string, ident *cctpb.Identifier, init *cctpb.Initializer) *cctpb.Declaration {
+func VarDeclAndInitializer(name string, ident *cctpb.Identifier, init *cctpb.Initializer) *cctpb.Declaration {
 	ds := &cctpb.DeclarationSpecifier{
 		Value: &cctpb.DeclarationSpecifier_TypeSpecifier{
 			&cctpb.TypeSpecifier{
@@ -343,77 +267,8 @@ func declareVarWithTypeIdentAndInitializer(name string, ident *cctpb.Identifier,
 	}
 }
 
-func declareVarWithTypeIdent(name string, ident *cctpb.Identifier) *cctpb.Declaration {
-	ds := &cctpb.DeclarationSpecifier{
-		Value: &cctpb.DeclarationSpecifier_TypeSpecifier{
-			&cctpb.TypeSpecifier{
-				Value: &cctpb.TypeSpecifier_SimpleTypeSpecifier{
-					&cctpb.SimpleTypeSpecifier{
-						Value: &cctpb.SimpleTypeSpecifier_DeclaredName{ident},
-					},
-				},
-			},
-		},
-	}
-
-	d := &cctpb.Declarator{
-		Value: &cctpb.Declarator_DeclaredName{
-			&cctpb.Identifier{
-				Id: proto.String(name),
-			},
-		},
-	}
-
-	sd := &cctpb.SimpleDeclaration{}
-	sd.Specifiers = append(sd.Specifiers, ds)
-	sd.Declarators = append(sd.Declarators, d)
-
-	return &cctpb.Declaration{
-		Value: &cctpb.Declaration_BlockDeclaration{
-			&cctpb.BlockDeclaration{
-				Value: &cctpb.BlockDeclaration_SimpleDeclaration{sd},
-			},
-		},
-	}
-}
-
-func declareVar(name string) *cctpb.Declaration {
-	return declareVarWithTypeIdent(name, &cctpb.Identifier{
-		Namespace: proto.String("donk"),
-		Id:        proto.String("var_t"),
-	})
-}
-
-func declareAuto(name string) *cctpb.Declaration {
-	return declareVarWithTypeIdent(name, &cctpb.Identifier{
-		Id: proto.String("auto"),
-	})
-}
-
-func isStringLiteral(e *cctpb.Expression) bool {
-	switch e.GetValue().(type) {
-	case *cctpb.Expression_LiteralExpression:
-		switch e.GetLiteralExpression().GetValue().(type) {
-		case *cctpb.Literal_StringLiteral:
-			{
-				return true
-			}
-		default:
-			{
-				return false
-			}
-		}
-	default:
-		{
-			return false
-		}
-	}
-}
-
 func (t *Transformer) declareVarWithVal(name string, val *cctpb.Expression, varType scope.VarType) *cctpb.Statement {
-	var ds *cctpb.DeclarationSpecifier
-	// if varType == scope.VarTypeDMObject {
-	ds = &cctpb.DeclarationSpecifier{
+	ds := &cctpb.DeclarationSpecifier{
 		Value: &cctpb.DeclarationSpecifier_TypeSpecifier{
 			&cctpb.TypeSpecifier{
 				Value: &cctpb.TypeSpecifier_SimpleTypeSpecifier{
@@ -428,27 +283,9 @@ func (t *Transformer) declareVarWithVal(name string, val *cctpb.Expression, varT
 			},
 		},
 	}
-	// } else {
-	// 	ds = &cctpb.DeclarationSpecifier{
-	// 		Value: &cctpb.DeclarationSpecifier_TypeSpecifier{
-	// 			&cctpb.TypeSpecifier{
-	// 				Value: &cctpb.TypeSpecifier_SimpleTypeSpecifier{
-	// 					&cctpb.SimpleTypeSpecifier{
-	// 						Value: &cctpb.SimpleTypeSpecifier_DeclaredName{
-	// 							&cctpb.Identifier{
-	// 								Namespace: proto.String("donk"),
-	// 								Id:        proto.String("var_t"),
-	// 							},
-	// 						},
-	// 					},
-	// 				},
-	// 			},
-	// 		},
-	// 	}
-	// }
 	if isStringLiteral(val) {
 		t.curScope().AddDefnHeader("<string>")
-		val = stdStringCtor(val.GetLiteralExpression().GetStringLiteral())
+		val = vsk.StdStringCtor(val.GetLiteralExpression().GetStringLiteral())
 	}
 
 	d := &cctpb.Declarator{
@@ -480,6 +317,26 @@ func (t *Transformer) declareVarWithVal(name string, val *cctpb.Expression, varT
 				},
 			},
 		},
+	}
+}
+
+func isStringLiteral(e *cctpb.Expression) bool {
+	switch e.GetValue().(type) {
+	case *cctpb.Expression_LiteralExpression:
+		switch e.GetLiteralExpression().GetValue().(type) {
+		case *cctpb.Literal_StringLiteral:
+			{
+				return true
+			}
+		default:
+			{
+				return false
+			}
+		}
+	default:
+		{
+			return false
+		}
 	}
 }
 
@@ -549,16 +406,6 @@ func rawInt(expr *astpb.Expression) int32 {
 	}
 
 	panic(fmt.Sprintf("asked for raw int of unsupported expression %v", proto.MarshalTextString(expr)))
-}
-
-func makeIntExpr(i int32) *cctpb.Expression {
-	return &cctpb.Expression{
-		Value: &cctpb.Expression_LiteralExpression{
-			&cctpb.Literal{
-				Value: &cctpb.Literal_IntegerLiteral{int64(i)},
-			},
-		},
-	}
 }
 
 func makeApiFuncDecl(name string) *cctpb.FunctionDeclaration {

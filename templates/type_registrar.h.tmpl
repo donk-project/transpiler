@@ -14,7 +14,7 @@
 
 namespace {{$.CoreNamespace}} {			
 
-void RegisterAll(std::map<donk::path_t, std::vector<std::function<void(donk::iota_t&)>>>& collector);			
+void RegisterAll(std::shared_ptr<std::map<donk::path_t, std::vector<std::function<void(donk::iota_t&)>>>> collector);
 
 } // namespace {{$.CoreNamespace}}			
 

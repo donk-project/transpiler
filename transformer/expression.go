@@ -10,6 +10,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/scope"
+	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
@@ -140,16 +141,7 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 
 					wrld := genericCtxtCall("world")
 					isWorld := proto.Equal(lhs, wrld)
-					wrldLog := &cctpb.Expression{
-						Value: &cctpb.Expression_MemberAccessExpression{
-							&cctpb.MemberAccessExpression{
-								Operator: cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum(),
-								Lhs:      wrld,
-								Rhs:      getObjFunc(BroadcastLogRedirectProcName),
-							},
-						},
-					}
-
+					wrldLog := vsk.PtrMember(wrld, getObjFunc(BroadcastLogRedirectProcName))
 					isView := proto.Equal(lhs, coreProcCall("view"))
 					isWorldLog := proto.Equal(lhs, wrldLog)
 					isBitwiseLShift := expr.GetArithmeticExpression().GetOperator() == cctpb.ArithmeticExpression_BITWISE_LSHIFT
@@ -161,15 +153,7 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 							Operator: cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum(),
 							Lhs:      lhs,
 						}
-						p := &cctpb.FunctionCallExpression{
-							Name: &cctpb.Expression{
-								Value: &cctpb.Expression_IdentifierExpression{
-									&cctpb.Identifier{
-										Id: proto.String("p"),
-									},
-								},
-							},
-						}
+						p := &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("p")}
 						p.Arguments = append(p.Arguments,
 							&cctpb.FunctionCallExpression_ExpressionArg{
 								Value: &cctpb.FunctionCallExpression_ExpressionArg_Expression{
@@ -213,9 +197,9 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 			case *cctpb.Expression_FunctionCallExpression:
 				{
 					// in function calls just add lhs and rhs as arguments
-					addFuncExprArg(expr.GetFunctionCallExpression(),
+					vsk.AddFuncArg(expr.GetFunctionCallExpression(),
 						t.walkExpression(e.GetBinaryOp().GetLhs()))
-					addFuncExprArg(expr.GetFunctionCallExpression(),
+					vsk.AddFuncArg(expr.GetFunctionCallExpression(),
 						t.walkExpression(e.GetBinaryOp().GetRhs()))
 					return expr
 				}
@@ -235,15 +219,7 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 					Operator: &operator,
 					Rhs:      rhs,
 				}
-				deref := &cctpb.Expression{
-					Value: &cctpb.Expression_UnaryExpression{
-						&cctpb.UnaryExpression{
-							Operator: cctpb.UnaryExpression_POINTER_INDIRECTION.Enum(),
-							Operand:  lhs,
-						},
-					},
-				}
-				assignExpr.Lhs = deref
+				assignExpr.Lhs = vsk.PtrIndirect(lhs)
 				return &cctpb.Expression{
 					Value: &cctpb.Expression_AssignmentExpression{assignExpr},
 				}
@@ -252,26 +228,12 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 				fce := &cctpb.Expression{
 					Value: &cctpb.Expression_FunctionCallExpression{
 						&cctpb.FunctionCallExpression{
-							Name: &cctpb.Expression{
-								Value: &cctpb.Expression_IdentifierExpression{
-									&cctpb.Identifier{
-										Id: proto.String("get_int"),
-									},
-								},
-							},
+							Name: vsk.StringIdExpr("get_int"),
 						},
 					},
 				}
 
-				rhs = &cctpb.Expression{
-					Value: &cctpb.Expression_MemberAccessExpression{
-						&cctpb.MemberAccessExpression{
-							Operator: cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum(),
-							Lhs:      rhs,
-							Rhs:      fce,
-						},
-					},
-				}
+				rhs = vsk.PtrMember(rhs, fce)
 			}
 
 			assignExpr := &cctpb.AssignmentExpression{

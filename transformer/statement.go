@@ -7,8 +7,10 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
-	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/scope"
+
+	astpb "snowfrost.garden/donk/proto/ast"
+	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
@@ -28,7 +30,7 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 		{
 			mae := genericCtxtCall("del")
 
-			addFuncExprArg(
+			vsk.AddFuncArg(
 				mae.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(),
 				t.walkExpression(s.GetDel().GetExpr()))
 
@@ -53,7 +55,7 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 				)
 			}
 
-			return wrapDeclarationInStatment(declareAuto(s.GetVar().GetName()))
+			return wrapDeclarationInStatment(vsk.DeclareAuto(s.GetVar().GetName()))
 		}
 	case s.GetDoWhile() != nil:
 		{
@@ -82,8 +84,8 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 
 				rbf := &cctpb.RangeBasedFor{}
 				decl := t.declareInt(s.GetForRange().GetName())
-				start := makeIntExpr(rawInt(s.GetForRange().GetStart()))
-				end := makeIntExpr(rawInt(s.GetForRange().GetEnd()))
+				start := vsk.IntLiteralExpr(rawInt(s.GetForRange().GetStart()))
+				end := vsk.IntLiteralExpr(rawInt(s.GetForRange().GetEnd()))
 				rbf.Declaration = decl
 				t.curScope().AddDefnHeader("\"donk/core/utils.h\"")
 				intRangeF := &cctpb.Identifier{
@@ -130,7 +132,7 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 	case s.GetForList() != nil:
 		{
 			rbf := &cctpb.RangeBasedFor{}
-			rbf.Declaration = declareVarWithTypeIdent(
+			rbf.Declaration = vsk.VarDecl(
 				s.GetForList().GetName(),
 				&cctpb.Identifier{
 					Id: proto.String("auto"),
@@ -149,16 +151,20 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 				}
 				if isVarIterator {
 					// Most likely a var_t pointer
-					mae := &cctpb.MemberAccessExpression{
-						Operator: cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum(),
-						Lhs:      expr,
-						Rhs: &cctpb.Expression{
-							Value: &cctpb.Expression_FunctionCallExpression{
-								&cctpb.FunctionCallExpression{
-									Name: &cctpb.Expression{
-										Value: &cctpb.Expression_IdentifierExpression{
-											&cctpb.Identifier{
-												Id: proto.String("get_list"),
+					mae := &cctpb.Expression{
+						Value: &cctpb.Expression_MemberAccessExpression{
+							&cctpb.MemberAccessExpression{
+								Operator: cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum(),
+								Lhs:      expr,
+								Rhs: &cctpb.Expression{
+									Value: &cctpb.Expression_FunctionCallExpression{
+										&cctpb.FunctionCallExpression{
+											Name: &cctpb.Expression{
+												Value: &cctpb.Expression_IdentifierExpression{
+													&cctpb.Identifier{
+														Id: proto.String("get_list"),
+													},
+												},
 											},
 										},
 									},
@@ -166,17 +172,7 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 							},
 						},
 					}
-					rbf.RangeExpression = &cctpb.Expression{
-						Value: &cctpb.Expression_UnaryExpression{
-							&cctpb.UnaryExpression{
-								Operator: cctpb.UnaryExpression_POINTER_INDIRECTION.Enum(),
-								Operand: &cctpb.Expression{
-									Value: &cctpb.Expression_MemberAccessExpression{mae},
-								},
-							},
-						},
-					}
-
+					rbf.RangeExpression = vsk.PtrIndirect(mae)
 				} else {
 					rbf.RangeExpression = expr
 				}
@@ -207,7 +203,7 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 		{
 			fce := genericCtxtCall("Result")
 			if s.GetReturnS().GetExpr() != nil {
-				addFuncExprArg(fce.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), t.walkExpression(s.GetReturnS().GetExpr()))
+				vsk.AddFuncArg(fce.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), t.walkExpression(s.GetReturnS().GetExpr()))
 			}
 			stmt.Value = &cctpb.Statement_ExpressionStatement{fce}
 			return stmt
@@ -254,6 +250,10 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 			}
 			panic(fmt.Sprintf("multi-armed if not supported yet: %v", proto.MarshalTextString(s.GetIfS())))
 
+		}
+	case s.GetSetting() != nil:
+		{
+			
 		}
 
 	}

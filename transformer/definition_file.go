@@ -6,8 +6,8 @@ package transformer
 import (
 	"strings"
 
-	"snowfrost.garden/donk/transpiler/scope"
 	"github.com/golang/protobuf/proto"
+	"snowfrost.garden/donk/transpiler/scope"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 

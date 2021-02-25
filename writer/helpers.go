@@ -15,31 +15,18 @@ var UNARY_OP_FORMATTERS = map[cctpb.UnaryExpression_Operator]string{
 	cctpb.UnaryExpression_POINTER_INDIRECTION: "*(%v)",
 }
 
-// var ARITHMETIC_OP_FORMATTERS = map[cctpb.ArithmeticExpression_Operator]string{
-// 	cctpb.ArithmeticExpression_ADDITION:       "%v + %v",
-// 	cctpb.ArithmeticExpression_SUBTRACTION:    "%v - %v",
-// 	cctpb.ArithmeticExpression_MULTIPLICATION: "%v * %v",
-// 	cctpb.ArithmeticExpression_DIVISION:       "%v / %v",
-// 	cctpb.ArithmeticExpression_MODULO:         "%v %% %v",
-// 	cctpb.ArithmeticExpression_BITWISE_AND:    "%v & %v",
-// 	cctpb.ArithmeticExpression_BITWISE_OR:     "%v | %v",
-// 	cctpb.ArithmeticExpression_BITWISE_XOR:    "%v ^ %v",
-// 	cctpb.ArithmeticExpression_BITWISE_LSHIFT: "%v << %v",
-// 	cctpb.ArithmeticExpression_BITWISE_RSHIFT: "%v >> %v",
-// }
-
- var ARITHMETIC_OP_FORMATTERS = map[cctpb.ArithmeticExpression_Operator]string{
- 	cctpb.ArithmeticExpression_ADDITION:       "%v->operator+(%v)",
- 	cctpb.ArithmeticExpression_SUBTRACTION:    "%v->operator-(%v)",
- 	cctpb.ArithmeticExpression_MULTIPLICATION: "%v->operator*(%v)",
- 	cctpb.ArithmeticExpression_DIVISION:       "%v->operator/(%v)",
- 	cctpb.ArithmeticExpression_MODULO:         "%v->operator%%(%v)",
- 	cctpb.ArithmeticExpression_BITWISE_AND:    "%v->operator&(%v)",
- 	cctpb.ArithmeticExpression_BITWISE_OR:     "%v->operator|(%v)",
- 	cctpb.ArithmeticExpression_BITWISE_XOR:    "%v->operator^(%v)",
- 	cctpb.ArithmeticExpression_BITWISE_LSHIFT: "%v->operator<<(%v)",
- 	cctpb.ArithmeticExpression_BITWISE_RSHIFT: "%v->operator>>(%v)",
- }
+var ARITHMETIC_OP_FORMATTERS = map[cctpb.ArithmeticExpression_Operator]string{
+	cctpb.ArithmeticExpression_ADDITION:       "%v->operator+(%v)",
+	cctpb.ArithmeticExpression_SUBTRACTION:    "%v->operator-(%v)",
+	cctpb.ArithmeticExpression_MULTIPLICATION: "%v->operator*(%v)",
+	cctpb.ArithmeticExpression_DIVISION:       "%v->operator/(%v)",
+	cctpb.ArithmeticExpression_MODULO:         "%v->operator%%(%v)",
+	cctpb.ArithmeticExpression_BITWISE_AND:    "%v->operator&(%v)",
+	cctpb.ArithmeticExpression_BITWISE_OR:     "%v->operator|(%v)",
+	cctpb.ArithmeticExpression_BITWISE_XOR:    "%v->operator^(%v)",
+	cctpb.ArithmeticExpression_BITWISE_LSHIFT: "%v->operator<<(%v)",
+	cctpb.ArithmeticExpression_BITWISE_RSHIFT: "%v->operator>>(%v)",
+}
 
 var ASSIGNMENT_OP_FORMATTERS = map[cctpb.AssignmentExpression_Operator]string{
 	cctpb.AssignmentExpression_SIMPLE:         "%v = %v",
@@ -83,7 +70,7 @@ var ACCESS_SPECIFIERS = map[cctpb.AccessSpecifier]string{
 
 var VIRT_SPECIFIERS = map[cctpb.VirtSpecifier_Keyword]string{
 	cctpb.VirtSpecifier_OVERRIDE: "override",
-	cctpb.VirtSpecifier_FINAL: "final",
+	cctpb.VirtSpecifier_FINAL:    "final",
 
 	// I don't know if there's a difference between these two and at this
 	// point I'm too afraid to ask
@@ -100,9 +87,9 @@ func (w Writer) printCppType(t *cctpb.CppType) string {
 	case cctpb.CppType_REFERENCE:
 		return fmt.Sprintf("%v&", t.GetName())
 	case cctpb.CppType_UNIQUE_PTR:
-		return fmt.Sprint("std::unique_ptr<%v>", t.GetName())
+		return fmt.Sprintf("std::unique_ptr<%v>", t.GetName())
 	case cctpb.CppType_SHARED_PTR:
-		return fmt.Sprint("std::shared_ptr<%v>", t.GetName())
+		return fmt.Sprintf("std::shared_ptr<%v>", t.GetName())
 	}
 	panic("unable to print cpptype")
 }

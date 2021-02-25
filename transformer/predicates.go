@@ -4,7 +4,6 @@
 package transformer
 
 import (
-	// "log"
 	"snowfrost.garden/donk/transpiler/parser"
 	"snowfrost.garden/donk/transpiler/paths"
 )

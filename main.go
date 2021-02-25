@@ -13,13 +13,11 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/parser"
 	"snowfrost.garden/donk/transpiler/transformer"
 	"snowfrost.garden/donk/transpiler/writer"
-
-	astpb "snowfrost.garden/donk/proto/ast"
 )
-
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
@@ -27,9 +25,9 @@ var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 func main() {
 	outputPath := flag.String("output_path", "", "Directory for generated output")
 	inputProto := flag.String("input_proto", "", "Location of input binarypb")
-  // Change this if you want the C++ representation of your Dreammaker project to
-  // have a different root name. `tgcc` refers to 'tgstation' and '.cc', the C++
-  // definition file extension.
+	// Change this if you want the C++ representation of your Dreammaker project to
+	// have a different root name. `tgcc` refers to 'tgstation' and '.cc', the C++
+	// definition file extension.
 	projectName := flag.String("project_name", "tgcc", "Name of generated C++ project (filename friendly)")
 	flag.Parse()
 

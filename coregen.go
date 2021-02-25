@@ -11,12 +11,10 @@ import (
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/protobuf/proto"
-
+	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/parser"
 	"snowfrost.garden/donk/transpiler/transformer"
 	"snowfrost.garden/donk/transpiler/writer"
-
-	astpb "snowfrost.garden/donk/proto/ast"
 )
 
 func main() {

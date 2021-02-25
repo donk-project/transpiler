@@ -10,6 +10,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/paths"
+	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
@@ -38,16 +39,11 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 				}
 				e.Value = &cctpb.Expression_MemberAccessExpression{mae}
 			} else if t.passedAsArg(id) {
-				mae := &cctpb.MemberAccessExpression{
-					Operator: cctpb.MemberAccessExpression_MEMBER_OF_OBJECT.Enum(),
-					Lhs:      argParam(),
-					Rhs:      getObjVar(id),
-				}
-				e.Value = &cctpb.Expression_MemberAccessExpression{mae}
+				e = vsk.ObjMember(argParam(), getObjVar(id))
 			} else if t.curScope().HasGlobal(id) {
 				e = genericCtxtCall("cvar")
 				fce := e.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression()
-				addFuncExprArg(fce, &cctpb.Expression{
+				vsk.AddFuncArg(fce, &cctpb.Expression{
 					Value: &cctpb.Expression_LiteralExpression{
 						&cctpb.Literal{Value: &cctpb.Literal_StringLiteral{id}},
 					},
@@ -84,9 +80,7 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 
 	case term.StringT != nil:
 		{
-			e.Value = &cctpb.Expression_LiteralExpression{&cctpb.Literal{
-				Value: &cctpb.Literal_StringLiteral{*term.StringT},
-			}}
+			e = vsk.StringLiteralExpr(*term.StringT)
 		}
 
 	case term.Resource != nil:
@@ -121,7 +115,7 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 					},
 				}
 				for _, ex := range term.GetCall().GetExpr() {
-					addFuncExprArg(fc, t.walkExpression(ex))
+					vsk.AddFuncArg(fc, t.walkExpression(ex))
 				}
 				e.Value = &cctpb.Expression_FunctionCallExpression{fc}
 			}
@@ -182,10 +176,10 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 					},
 				},
 			}
-			addFuncExprArg(fce, fsExpr)
+			vsk.AddFuncArg(fce, fsExpr)
 
 			for _, formatArg := range formatArgs {
-				addFuncExprArg(fce, formatArg)
+				vsk.AddFuncArg(fce, formatArg)
 			}
 
 			e.Value = &cctpb.Expression_FunctionCallExpression{fce}
@@ -232,11 +226,11 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 			}
 
 			iList := &cctpb.InitializerList{}
-			
+
 			for _, call := range term.GetList().GetCall() {
 				iList.Args = append(iList.Args, t.walkExpression(call))
 			}
-			fce.Arguments = append(fce.Arguments, 
+			fce.Arguments = append(fce.Arguments,
 				&cctpb.FunctionCallExpression_ExpressionArg{
 					Value: &cctpb.FunctionCallExpression_ExpressionArg_InitializerList{iList},
 				})

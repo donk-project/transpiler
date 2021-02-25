@@ -41,6 +41,7 @@ go_library(
         "@donk_transpiler//:paths",
         "@donk_transpiler//parser",
         "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+        "@vasker",
         "@vasker//:cc_grammar_go_proto",
     ],
 )

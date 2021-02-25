@@ -9,7 +9,6 @@ import (
 	"log"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
-
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/parser"
@@ -22,7 +21,6 @@ type Transformer struct {
 	coreNamespace string
 	coreParser    *parser.Parser
 	scopeStack    *scope.Stack
-	// curScope().     *scope.ScopeCtxt
 	includePrefix string
 	lastFileId    uint32
 	parser        *parser.Parser

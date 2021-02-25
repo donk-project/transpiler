@@ -12,8 +12,39 @@ import (
 	"snowfrost.garden/donk/transpiler/paths"
 )
 
-func (p *DMProc) String() string {
-	return fmt.Sprintf("Proc<%v%v>", p.Type.Path.FullyQualifiedString(), p.Name)
+type ProcAccess int
+
+const (
+	ProcAccessUnknown = iota
+	ProcAccessInView
+	ProcAccessInOView
+	ProcAccessInUsrLoc
+	ProcAccessInUsr
+	ProcAccessInWorld
+	ProcAccessEqUsr
+	ProcAccessInGroup
+)
+
+type ProcFlags struct {
+	Name         string
+	Desc         string
+	Category     string
+	Hidden       bool
+	PopupMenu    bool
+	Instant      bool
+	Invisibility int
+	Access       ProcAccess
+	Range        int
+	Background   bool
+	WaitFor      bool
+}
+
+func DefaultProcFlags() ProcFlags {
+	flags := ProcFlags{
+		PopupMenu: true,
+		WaitFor:   true,
+	}
+	return flags
 }
 
 type DMProc struct {
@@ -22,6 +53,16 @@ type DMProc struct {
 	Name  string
 	Proto *astpb.TypeProc
 	Decl  []string
+	Flags ProcFlags
+}
+
+func NewProc(s *Parser, t *DMType, n string, pb *astpb.TypeProc) *DMProc {
+	p := &DMProc{State: s, Type: t, Name: n, Proto: pb, Flags: DefaultProcFlags()}
+	return p
+}
+
+func (p *DMProc) String() string {
+	return fmt.Sprintf("Proc<%v%v>", p.Type.Path.FullyQualifiedString(), p.Name)
 }
 
 func (p *DMProc) ArgNames() []string {
@@ -43,8 +84,10 @@ func (p *DMProc) HasArg(s string) bool {
 	return false
 }
 
-// EmitName deals with symbol collisions with C++, or collisions
-// between namespaces (such as donk::icon) with core procs.
+// EmitName deals with symbol collisions with C++, or collisions between
+// namespaces (such as donk::icon) with core procs. This only affects
+// source-level symbols; procs and vars are registered with their original names
+// in the C++ iotas.
 func (p *DMProc) EmitName() string {
 	if p.Name == "new" {
 		return "new_"
@@ -74,22 +117,12 @@ func (p *DMProc) PrettyProto() string {
 	return proto.MarshalTextString(p.Proto)
 }
 
-func NewProc(s *Parser, t *DMType, n string, pb *astpb.TypeProc) *DMProc {
-	p := &DMProc{State: s, Type: t, Name: n, Proto: pb}
-	return p
-}
-
 func (d *DMProc) Block(idx int) *astpb.Block {
 	return d.Proto.Value[idx].Code.Present
 }
 
 func (d *DMProc) ProcPath() *paths.Path {
 	return d.Type.Path.Child(d.Name)
-}
-
-func (p *Parser) ParseProc(name string, dmType *DMType, pb *astpb.TypeProc) *DMProc {
-	proc := NewProc(p, dmType, name, pb)
-	return proc
 }
 
 func (p *Parser) ParseProcs(g *astpb.Graph, tbp *map[paths.Path]*DMType) {

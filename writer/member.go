@@ -82,10 +82,10 @@ func (w Writer) printMemberInitializerList(mi []*cctpb.MemberInitializer) string
 	}
 	var ms []string
 	for _, m := range mi {
-	var exprs []string
-	for _, e := range m.GetExpressions() {
-		exprs = append(exprs, printExpression(e))
-	}
+		var exprs []string
+		for _, e := range m.GetExpressions() {
+			exprs = append(exprs, printExpression(e))
+		}
 		ms = append(ms, fmt.Sprintf("%v(%v)",
 			printIdentifier(m.GetMember()),
 			strings.Join(exprs, ", ")))

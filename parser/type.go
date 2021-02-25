@@ -13,14 +13,14 @@ import (
 )
 
 type DMType struct {
-	State               *Parser
-	Path                *paths.Path
-	Proto               *astpb.Type
-	Dependencies        []*paths.Path
-	AdditionalDeps      []*paths.Path
-	Procs               []*DMProc
-	Vars                DMVars
-	ForwardDecls map[string]*paths.Path
+	State          *Parser
+	Path           *paths.Path
+	Proto          *astpb.Type
+	Dependencies   []*paths.Path
+	AdditionalDeps []*paths.Path
+	Procs          []*DMProc
+	Vars           DMVars
+	ForwardDecls   map[string]*paths.Path
 }
 
 func NewType(s *Parser, p *paths.Path, pb *astpb.Type) *DMType {

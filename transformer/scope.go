@@ -5,7 +5,6 @@ package scope
 
 import (
 	"fmt"
-	// "log"
 
 	"snowfrost.garden/donk/transpiler/parser"
 	"snowfrost.garden/donk/transpiler/paths"

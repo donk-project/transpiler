@@ -39,5 +39,4 @@ func (t Transformer) buildDeclFile() {
 		t.curScope().CurDeclFile.FileMetadata.Filename = proto.String(strings.ToLower(
 			strings.TrimPrefix(t.curScope().CurPath.ParentPath().FullyQualifiedString(), "/")) + "root.h")
 	}
-
 }

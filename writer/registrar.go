@@ -21,7 +21,7 @@ type RegistrarContext struct {
 	TypeRegistrarInclude string
 	Parser               *parser.Parser
 	RootInclude          string
-	TypeIncludes []string
+	TypeIncludes         []string
 }
 
 // TODO: Migrate TypeRegistrar templates over to ordinary codegen
