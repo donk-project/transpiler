@@ -5,7 +5,7 @@ package transformer
 
 import (
 	"fmt"
-	_ "log"
+	"log"
 
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
@@ -23,6 +23,7 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 	if e == nil {
 		panic("tried to walk empty expression")
 	}
+	log.Printf("=========================== ASTPB EXPRESSION ========================\n%v\n", proto.MarshalTextString(e))
 
 	switch {
 	case e.GetBase() != nil:

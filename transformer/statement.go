@@ -5,6 +5,7 @@ package transformer
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/golang/protobuf/proto"
 	"snowfrost.garden/donk/transpiler/scope"
@@ -16,7 +17,7 @@ import (
 
 func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 	stmt := &cctpb.Statement{}
-	// log.Printf("\n============ASTPB Statement:\n%v\n", proto.MarshalTextString(s))
+	log.Printf("=========================== ASTPB STATEMENT ========================\n%v\n", proto.MarshalTextString(s))
 	if s == nil {
 		return stmt
 	}
@@ -77,6 +78,27 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 			}
 			return stmt
 		}
+
+	case s.GetWhileS() != nil: {
+			if s.GetWhileS().GetCondition() == nil {
+				panic(fmt.Sprintf("no expected condition in while: %v", proto.MarshalTextString(s.GetDoWhile())))
+			}
+			wExpr := t.walkExpression(s.GetWhileS().GetCondition())
+			var wStmts []*cctpb.Statement
+			for _, wStmt := range s.GetWhileS().GetBlock().GetStatement() {
+				wStmts = append(wStmts, t.walkStatement(wStmt))
+			}
+			stmt.Value = &cctpb.Statement_While{
+				&cctpb.While{
+					Condition: wExpr,
+					BlockDefinition: &cctpb.BlockDefinition{
+						Statements: wStmts,
+					},
+				},
+			}
+			return stmt
+	}
+
 	case s.GetForRange() != nil:
 		{
 			if isRawInt(s.GetForRange().GetStart()) && isRawInt(s.GetForRange().GetEnd()) {
@@ -129,6 +151,7 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 
 			panic(fmt.Sprintf("given for-range syntax not supported yet: %v", proto.MarshalTextString(s.GetForRange())))
 		}
+
 	case s.GetForList() != nil:
 		{
 			rbf := &cctpb.RangeBasedFor{}
@@ -199,6 +222,7 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 
 			return stmt
 		}
+
 	case s.GetReturnS() != nil:
 		{
 			fce := genericCtxtCall("Result")
@@ -250,10 +274,6 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 			}
 			panic(fmt.Sprintf("multi-armed if not supported yet: %v", proto.MarshalTextString(s.GetIfS())))
 
-		}
-	case s.GetSetting() != nil:
-		{
-			
 		}
 
 	}

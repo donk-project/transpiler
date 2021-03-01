@@ -408,14 +408,16 @@ func rawInt(expr *astpb.Expression) int32 {
 	panic(fmt.Sprintf("asked for raw int of unsupported expression %v", proto.MarshalTextString(expr)))
 }
 
-func makeApiFuncDecl(name string) *cctpb.FunctionDeclaration {
+func (t Transformer) makeApiFuncDecl(name string) *cctpb.FunctionDeclaration {
 	fd := &cctpb.FunctionDeclaration{
 		Name: proto.String(name),
 		ReturnType: &cctpb.CppType{
 			PType: cctpb.CppType_NONE.Enum(),
-			Name:  proto.String("void"),
+			Name:  proto.String("donk::running_proc"),
 		},
 	}
+	t.curScope().AddDeclHeader("\"cppcoro/generator.hpp\"")
+	t.curScope().AddDeclHeader("\"donk/core/procs.h\"")
 
 	fd.Arguments = append(fd.Arguments,
 		&cctpb.FunctionArgument{

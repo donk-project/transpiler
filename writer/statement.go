@@ -20,6 +20,8 @@ func printStatement(s *cctpb.Statement) string {
 		return printDeclaration(s.GetDeclarationStatement()) + ";"
 	case *cctpb.Statement_DoWhile:
 		return printDoWhile(s.GetDoWhile())
+	case *cctpb.Statement_While:
+		return printWhile(s.GetWhile())
 	case *cctpb.Statement_RangeBasedFor:
 		return printRangeBasedFor(s.GetRangeBasedFor())
 	case *cctpb.Statement_ReturnStatement:
@@ -72,6 +74,17 @@ func printDoWhile(s *cctpb.DoWhile) string {
 	return fmt.Sprintf("do {\n%v\n} while (%v);\n",
 		strings.Join(stmts, "\n"),
 		printExpression(s.GetCondition()))
+}
+
+func printWhile(s *cctpb.While) string {
+	var stmts []string
+	for _, stmt := range s.GetBlockDefinition().GetStatements() {
+		stmts = append(stmts, printStatement(stmt))
+	}
+
+	return fmt.Sprintf("while (%v) {\n%v\n}\n",
+		printExpression(s.GetCondition()),
+		strings.Join(stmts, "\n"))
 }
 
 func printRangeBasedFor(rbf *cctpb.RangeBasedFor) string {

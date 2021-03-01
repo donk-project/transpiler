@@ -166,8 +166,8 @@ func (t Transformer) scan(p paths.Path, typ *parser.DMType) {
 
 	if t.isCoreGen() && t.curScope().CurPath.Equals("/world") {
 		procCount += 2
-		broadcast := makeApiFuncDecl(BroadcastRedirectProcName)
-		broadcastLog := makeApiFuncDecl(BroadcastLogRedirectProcName)
+		broadcast := t.makeApiFuncDecl(BroadcastRedirectProcName)
+		broadcastLog := t.makeApiFuncDecl(BroadcastLogRedirectProcName)
 
 		nsDecl.FunctionDeclarations = append(nsDecl.FunctionDeclarations, broadcast)
 		nsDecl.FunctionDeclarations = append(nsDecl.FunctionDeclarations, broadcastLog)
@@ -252,6 +252,9 @@ func (t Transformer) makeFuncDefn(p *parser.DMProc) *cctpb.FunctionDefinition {
 
 	proc := p.Proto.Value[len(p.Proto.Value)-1]
 	funcDefn := &cctpb.FunctionDefinition{}
+	if proc.GetCode().GetInvalid() {
+		log.Printf("===================\nInvalid code block found: \n%v\n\n", proto.MarshalTextString(proc.GetCode()))
+	}
 	funcDefn.BlockDefinition = t.walkBlock(proc.GetCode().GetPresent())
 
 	t.PopScope()
@@ -263,9 +266,11 @@ func (t Transformer) makeFuncDecl(p *parser.DMProc) *cctpb.FunctionDeclaration {
 		Name: proto.String(p.EmitName()),
 		ReturnType: &cctpb.CppType{
 			PType: cctpb.CppType_NONE.Enum(),
-			Name:  proto.String("void"),
+			Name:  proto.String("donk::running_proc"),
 		},
 	}
+	t.curScope().AddDeclHeader("\"cppcoro/generator.hpp\"")
+	t.curScope().AddDeclHeader("\"donk/core/procs.h\"")
 
 	fd.Arguments = append(fd.Arguments,
 		&cctpb.FunctionArgument{
