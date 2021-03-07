@@ -12,11 +12,11 @@ import (
 )
 
 type DMVar struct {
-	State        *Parser
-	Type         *DMType
-	Name         string
-	Proto        *astpb.TypeVar
-	Path         *paths.Path
+	State *Parser
+	Type  *DMType
+	Name  string
+	Proto *astpb.TypeVar
+	Path  *paths.Path
 }
 
 type DMVars []*DMVar

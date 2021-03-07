@@ -15,16 +15,31 @@ import (
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
+var knownSynchronousProcs = map[string]bool{
+	"/rand": true,
+	// TODO: Keeping track of object types is going to have to be much more sophisticated.
+	// It's easy to tell that a proc call is a global, or if the type is a known token
+	// (world, usr). But random objects in scope will have to have their types deduced
+	// before we can determine if the proc being called is known synchronous. i.e.
+	// There is no way at current to put "/mob/procname" here and have it recognized
+	// without more object type deduction.
+}
+
 func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 	stmt := &cctpb.Statement{}
 	log.Printf("=========================== ASTPB STATEMENT ========================\n%v\n", proto.MarshalTextString(s))
 	if s == nil {
 		return stmt
 	}
+
+	if t.isSleep(s) {
+		return t.astpbSleepToCctpbSleep(s)
+	}
+
 	switch {
 	case s.GetExpr() != nil:
 		{
-			stmt.Value = &cctpb.Statement_ExpressionStatement{t.walkExpression(s.GetExpr().GetExpr())}
+			stmt.Value = &cctpb.Statement_ExpressionStatement{t.walkExpression(s.GetExpr())}
 			return stmt
 		}
 	case s.GetDel() != nil:
@@ -48,6 +63,51 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 				if isRawInt(s.GetVar().GetValue()) {
 					vr.Type = scope.VarTypeInt
 				}
+				if isRawString(s.GetVar().GetValue()) {
+					vr.Type = scope.VarTypeDMObject
+				}
+				if s.GetVar().GetValue().GetBase().GetTerm().GetCall() != nil {
+					vr.Type = scope.VarTypeDMObject
+					if s.GetVar().GetValue().GetBase().GetTerm().GetCall().S != nil {
+						fn := s.GetVar().GetValue().GetBase().GetTerm().GetCall().GetS()
+						if t.IsProcInCore(fn) {
+							var exprs []*cctpb.Expression
+							for _, ex := range s.GetVar().GetValue().GetBase().GetTerm().GetCall().GetExpr() {
+								exprs = append(exprs, t.walkExpression(ex))
+							}
+							rooted := "/" + fn
+							_, ok := knownSynchronousProcs[rooted]
+							if ok {
+								invokeType := InvokeTypeSyncProc
+								pc := t.procCall(genericCtxtCall("Global"), fn, exprs, invokeType)
+								t.curScope().AddScopedVar(vr)
+								return t.declareVarWithVal(s.GetVar().GetName(), pc, vr.Type)
+							} else {
+								invokeType := InvokeTypeChildProc
+								// Here is where we need to create two statements:
+								// One co_yields the asynchronous proc as a child proc
+								// The other assigns the value to the newly created var
+								coYield := &cctpb.CoYield{
+									Expr: t.procCall(genericCtxtCall("Global"), fn, exprs, invokeType),
+								}
+								childResult := genericCtxtCall("ChildResult")
+								applyVal := t.declareVarWithVal(s.GetVar().GetName(), childResult, vr.Type)
+								return &cctpb.Statement{
+									Value: &cctpb.Statement_CompoundStatement{
+										&cctpb.CompoundStatement{
+											Statements: []*cctpb.Statement{
+												&cctpb.Statement{
+													Value: &cctpb.Statement_CoYield{coYield},
+												},
+												applyVal,
+											},
+										},
+									},
+								}
+							}
+						}
+					}
+				}
 				t.curScope().AddScopedVar(vr)
 				return t.declareVarWithVal(
 					s.GetVar().GetName(),
@@ -56,6 +116,7 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 				)
 			}
 
+			// TODO: Pretty sure this is wrong, an auto decl with no value?
 			return wrapDeclarationInStatment(vsk.DeclareAuto(s.GetVar().GetName()))
 		}
 	case s.GetDoWhile() != nil:
@@ -79,7 +140,8 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 			return stmt
 		}
 
-	case s.GetWhileS() != nil: {
+	case s.GetWhileS() != nil:
+		{
 			if s.GetWhileS().GetCondition() == nil {
 				panic(fmt.Sprintf("no expected condition in while: %v", proto.MarshalTextString(s.GetDoWhile())))
 			}
@@ -97,7 +159,7 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 				},
 			}
 			return stmt
-	}
+		}
 
 	case s.GetForRange() != nil:
 		{
@@ -235,19 +297,14 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 
 	case s.GetIfS() != nil:
 		{
-			if len(s.GetIfS().GetArm()) == 1 {
+			var allIfs []*cctpb.IfStatement
+			for _, arm := range s.GetIfS().GetArm() {
 				ifs := &cctpb.IfStatement{}
-				arm := s.GetIfS().GetArm()[0]
 				ifs.Condition = t.walkExpression(arm.GetExpr())
 				var trueStmts []*cctpb.Statement
-				var falseStmts []*cctpb.Statement
 
 				for _, tS := range arm.GetBlock().GetStatement() {
 					trueStmts = append(trueStmts, t.walkStatement(tS))
-				}
-
-				for _, fS := range s.GetIfS().GetElseArm().GetStatement() {
-					falseStmts = append(falseStmts, t.walkStatement(fS))
 				}
 
 				ifs.StatementTrue = &cctpb.Statement{
@@ -258,22 +315,47 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 					},
 				}
 
-				if len(falseStmts) > 0 {
+				allIfs = append([]*cctpb.IfStatement{ifs}, allIfs...)
+			}
+
+			// This ugly garbage below is needed to turn DM ifs, which are represented
+			// in AST as a repeated list of arms followed by one condition-less else,
+			// into C++ grammar, in which ifs are pairs of statements, with the latter
+			// capable of being an additional if statement.
+			//
+			// We add each else arm in reverse order to a slice and then respectively
+			// assign each one to the false-arm of the one after it.
+			var lastElse []*cctpb.Statement
+			for _, fS := range s.GetIfS().GetElseArm().GetStatement() {
+				lastElse = append(lastElse, t.walkStatement(fS))
+			}
+
+			if len(allIfs) == 1 {
+				ifs := &cctpb.IfStatement{}
+				if len(lastElse) > 0 {
 					ifs.StatementFalse = &cctpb.Statement{
 						Value: &cctpb.Statement_CompoundStatement{
 							&cctpb.CompoundStatement{
-								Statements: falseStmts,
+								Statements: lastElse,
 							},
 						},
 					}
-
 				}
-
 				stmt.Value = &cctpb.Statement_IfStatement{ifs}
 				return stmt
+			} else if len(allIfs) > 1 {
+				var prior *cctpb.IfStatement
+				last, allIfs := allIfs[0], allIfs[1:]
+				for len(allIfs) > 0 {
+					prior, allIfs = allIfs[0], allIfs[1:]
+					prior.StatementFalse = &cctpb.Statement{
+						Value: &cctpb.Statement_IfStatement{last},
+					}
+					last = prior
+				}
+				stmt.Value = &cctpb.Statement_IfStatement{last}
+				return stmt
 			}
-			panic(fmt.Sprintf("multi-armed if not supported yet: %v", proto.MarshalTextString(s.GetIfS())))
-
 		}
 
 	}

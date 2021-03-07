@@ -17,6 +17,7 @@ http_archive(
 load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
 
 go_rules_dependencies()
+
 go_register_toolchains()
 
 http_archive(
@@ -31,13 +32,14 @@ load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
 protobuf_deps()
 
 http_archive(
-  name = "spacemandmm",
-  strip_prefix = "SpacemanDMM-pb2",
-  urls = ["https://github.com/warriorstar-orion/SpacemanDMM/archive/pb2.tar.gz"],
+    name = "spacemandmm",
+    sha256 = "4a234d4a7aa483e007c342aa45fc24dd12a6060c640ab64e232402d1e70dc0c8",
+    strip_prefix = "SpacemanDMM-f7ff007973f5211e5491415357f133d27938973a",
+    urls = ["https://github.com/warriorstar-orion/SpacemanDMM/archive/f7ff007973f5211e5491415357f133d27938973a.tar.gz"],
 )
 
 http_archive(
-  name = "vasker",
-  strip_prefix = "vasker-main",
-  urls = ["https://github.com/warriorstar-orion/vasker/archive/main.tar.gz"],
+    name = "vasker",
+    strip_prefix = "vasker-bd56f315090726a7fa4ad4f613eb3d4cfe740793",
+    urls = ["https://github.com/warriorstar-orion/vasker/archive/bd56f315090726a7fa4ad4f613eb3d4cfe740793.tar.gz"],
 )

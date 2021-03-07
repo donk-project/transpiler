@@ -5,6 +5,7 @@ package scope
 
 import (
 	"fmt"
+	// "log"
 
 	"snowfrost.garden/donk/transpiler/parser"
 	"snowfrost.garden/donk/transpiler/paths"
@@ -100,6 +101,7 @@ type ScopeCtxt struct {
 }
 
 func (s *ScopeCtxt) AddScopedVar(vr VarInScope) {
+	// log.Printf("AddScopedVar: %+v", vr)
 	s.DeclaredVars.Vars[vr.Name] = vr
 }
 

@@ -131,8 +131,25 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 			switch expr.Value.(type) {
 			case *cctpb.Expression_ComparisonExpression:
 				{
-					expr.GetComparisonExpression().Lhs = t.walkExpression(e.GetBinaryOp().GetLhs())
-					expr.GetComparisonExpression().Rhs = t.walkExpression(e.GetBinaryOp().GetRhs())
+					// TODO: Don't just look for an int literal, look for int-returning exprs
+					lhs := t.walkExpression(e.GetBinaryOp().GetLhs())
+					rhs := t.walkExpression(e.GetBinaryOp().GetRhs())
+					hasInt := isRawInt(e.GetBinaryOp().GetLhs()) || isRawInt(e.GetBinaryOp().GetRhs())
+					hasDmObj := t.isDMObject(lhs) || t.isDMObject(rhs)
+					if hasInt && hasDmObj {
+						isLhsInt := isRawInt(e.GetBinaryOp().GetLhs())
+						if isLhsInt {
+							expr.GetComparisonExpression().Lhs = lhs
+							expr.GetComparisonExpression().Rhs = vsk.PtrMember(rhs, vsk.FuncCall(vsk.Id("get_int")))
+							return expr
+						}
+						expr.GetComparisonExpression().Lhs = vsk.PtrMember(lhs, vsk.FuncCall(vsk.Id("get_int")))
+						expr.GetComparisonExpression().Rhs = rhs
+						return expr
+					}
+
+					expr.GetComparisonExpression().Lhs = lhs
+					expr.GetComparisonExpression().Rhs = rhs
 					return expr
 				}
 			case *cctpb.Expression_ArithmeticExpression:
@@ -143,46 +160,13 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 					wrld := genericCtxtCall("world")
 					isWorld := proto.Equal(lhs, wrld)
 					wrldLog := vsk.PtrMember(wrld, getObjFunc(BroadcastLogRedirectProcName))
-					isView := proto.Equal(lhs, coreProcCall("view"))
 					isWorldLog := proto.Equal(lhs, wrldLog)
 					isBitwiseLShift := expr.GetArithmeticExpression().GetOperator() == cctpb.ArithmeticExpression_BITWISE_LSHIFT
 
-					// TODO: Also world.log, or any list containing mobs, or any mob
-					if (isView || isWorld) && isBitwiseLShift {
-						// rewrite ctxt.world() << foo --> ctxt.world()->p("DONK_Broadcast", foo)
-						mae := &cctpb.MemberAccessExpression{
-							Operator: cctpb.MemberAccessExpression_MEMBER_OF_POINTER.Enum(),
-							Lhs:      lhs,
-						}
-						p := &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("p")}
-						p.Arguments = append(p.Arguments,
-							&cctpb.FunctionCallExpression_ExpressionArg{
-								Value: &cctpb.FunctionCallExpression_ExpressionArg_Expression{
-									&cctpb.Expression{
-										Value: &cctpb.Expression_LiteralExpression{
-											&cctpb.Literal{
-												Value: &cctpb.Literal_StringLiteral{BroadcastRedirectProcName},
-											},
-										},
-									},
-								},
-							})
-
-						p.Arguments = append(p.Arguments, &cctpb.FunctionCallExpression_ExpressionArg{
-							Value: &cctpb.FunctionCallExpression_ExpressionArg_Expression{rhs},
-						})
-						mae.Rhs = &cctpb.Expression{
-							Value: &cctpb.Expression_FunctionCallExpression{p}}
-						return &cctpb.Expression{
-							Value: &cctpb.Expression_MemberAccessExpression{mae},
-						}
-					} else if isWorldLog && isBitwiseLShift {
-						// rewrite ctxt.world()->v("log") << foo --> ctxt.world()->p("DONK_BroadcastLog", foo)
-						fce := lhs.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression()
-						fce.Arguments = append(fce.Arguments, &cctpb.FunctionCallExpression_ExpressionArg{
-							Value: &cctpb.FunctionCallExpression_ExpressionArg_Expression{rhs},
-						})
-						return lhs
+					// TODO: Also world.log, or any list containing mobs, or any mob, or view/oview
+					if (isWorld || isWorldLog) && isBitwiseLShift {
+						pc := t.procCall(wrld, BroadcastRedirectProcName, []*cctpb.Expression{rhs}, InvokeTypeAsyncProc)
+						return pc
 					}
 
 					expr.GetArithmeticExpression().Lhs = lhs

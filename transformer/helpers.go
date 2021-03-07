@@ -5,7 +5,7 @@ package transformer
 
 import (
 	"fmt"
-	_ "log"
+	// "log"
 
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
@@ -184,8 +184,24 @@ func (t Transformer) isVarAssignFromPtr(e *cctpb.Expression) bool {
 		if t.curScope().HasField(rId) && t.curScope().VarType(rId) == scope.VarTypeDMObject {
 			return true
 		}
+		if t.curScope().HasLocal(rId) && t.curScope().VarType(rId) == scope.VarTypeDMObject {
+			return true
+		}
 	}
 
+	return false
+}
+
+func (t Transformer) isDMObject(e *cctpb.Expression) bool {
+	if isRawIdentifier(e) {
+		rId := rawIdentifier(e)
+		if t.curScope().HasField(rId) && t.curScope().VarType(rId) == scope.VarTypeDMObject {
+			return true
+		}
+		if t.curScope().HasLocal(rId) && t.curScope().VarType(rId) == scope.VarTypeDMObject {
+			return true
+		}
+	}
 	return false
 }
 
@@ -208,16 +224,6 @@ func (t Transformer) isFmtRedirected(e *cctpb.Expression) bool {
 	}
 
 	return false
-}
-
-func addFuncInitListArg(fce *cctpb.FunctionCallExpression, exprs ...*cctpb.Expression) {
-	iList := &cctpb.InitializerList{}
-	for _, expr := range exprs {
-		iList.Args = append(iList.Args, expr)
-	}
-	fce.Arguments = append(fce.Arguments, &cctpb.FunctionCallExpression_ExpressionArg{
-		Value: &cctpb.FunctionCallExpression_ExpressionArg_InitializerList{iList},
-	})
 }
 
 func wrapDeclarationInStatment(decl *cctpb.Declaration) *cctpb.Statement {
@@ -284,8 +290,16 @@ func (t *Transformer) declareVarWithVal(name string, val *cctpb.Expression, varT
 		},
 	}
 	if isStringLiteral(val) {
-		t.curScope().AddDefnHeader("<string>")
-		val = vsk.StdStringCtor(val.GetLiteralExpression().GetStringLiteral())
+		if varType == scope.VarTypeDMObject {
+			t.curScope().AddDefnHeader("\"donk/core/vars.h\"")
+			vstr := vsk.NsId("donk", "var_t::str")
+			fc := vsk.FuncCall(vstr)
+			vsk.AddFuncArg(fc.GetFunctionCallExpression(), val)
+			val = fc
+		} else {
+			t.curScope().AddDefnHeader("<string>")
+			val = vsk.StdStringCtor(val.GetLiteralExpression().GetStringLiteral())
+		}
 	}
 
 	d := &cctpb.Declarator{
@@ -397,6 +411,16 @@ func isRawInt(expr *astpb.Expression) bool {
 	return false
 }
 
+func isRawString(expr *astpb.Expression) bool {
+	if expr.GetBase().GetTerm().StringT != nil {
+		return true
+	}
+	if expr.GetBase().GetTerm().GetExpr() != nil {
+		return isRawString(expr.GetBase().GetTerm().GetExpr())
+	}
+	return false
+}
+
 func rawInt(expr *astpb.Expression) int32 {
 	if expr.GetBase().GetTerm().IntT != nil {
 		return expr.GetBase().GetTerm().GetIntT()
@@ -406,6 +430,32 @@ func rawInt(expr *astpb.Expression) int32 {
 	}
 
 	panic(fmt.Sprintf("asked for raw int of unsupported expression %v", proto.MarshalTextString(expr)))
+}
+
+func (t Transformer) isSleep(s *astpb.Statement) bool {
+	call := s.GetExpr().GetBase().GetTerm().GetCall()
+	if call == nil {
+		return false
+	}
+	if call.GetS() != "sleep" {
+		return false
+	}
+	return true
+}
+
+func (t Transformer) astpbSleepToCctpbSleep(s *astpb.Statement) *cctpb.Statement {
+	ticks := rawInt(s.GetExpr().GetBase().GetTerm().GetCall().GetExpr()[0])
+	fc := vsk.FuncCall(vsk.Id("sleep"))
+	vsk.AddFuncArg(fc.GetFunctionCallExpression(), vsk.IntLiteralExpr(ticks))
+	ctxt := vsk.StringIdExpr("ctxt")
+	mae := vsk.ObjMember(ctxt, fc)
+	return &cctpb.Statement{
+		Value: &cctpb.Statement_CoYield{
+			&cctpb.CoYield{
+				Expr: mae,
+			},
+		},
+	}
 }
 
 func (t Transformer) makeApiFuncDecl(name string) *cctpb.FunctionDeclaration {

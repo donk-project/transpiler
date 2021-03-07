@@ -12,7 +12,7 @@ import (
 )
 
 func printStatement(s *cctpb.Statement) string {
-	// fmt.Printf("==============================\nCCTPB Statement:\n %v==============================\n", proto.MarshalTextString(s))
+	fmt.Printf("==============================\nCCTPB Statement:\n %v==============================\n", proto.MarshalTextString(s))
 	switch s.Value.(type) {
 	case *cctpb.Statement_ExpressionStatement:
 		return printExpression(s.GetExpressionStatement()) + ";"
@@ -30,11 +30,17 @@ func printStatement(s *cctpb.Statement) string {
 		return printIfStatement(s.GetIfStatement())
 	case *cctpb.Statement_CompoundStatement:
 		return printCompoundStatement(s.GetCompoundStatement())
+	case *cctpb.Statement_CoYield:
+		return printCoYield(s.GetCoYield())
 	case nil:
 		panic("nil statment")
 	default:
 		panic(fmt.Sprintf("cannot print unsupported statement %v", proto.MarshalTextString(s)))
 	}
+}
+
+func printCoYield(cy *cctpb.CoYield) string {
+	return fmt.Sprintf("co_yield %v;", printExpression(cy.GetExpr()))
 }
 
 func printReturnStatement(r *cctpb.ReturnStatement) string {
@@ -59,6 +65,11 @@ func printIfStatement(s *cctpb.IfStatement) string {
 
 	if s.GetStatementFalse() != nil {
 		sF := printStatement(s.GetStatementFalse())
+		// TODO: It shouldn't matter what kind of statement gets printed after
+		// the initial true-condition
+		if s.GetStatementFalse().GetIfStatement() != nil {
+			return fmt.Sprintf("if (%v) {\n%v\n} else %v\n", expr, sT, sF)
+		}
 		return fmt.Sprintf("if (%v) {\n%v\n} else {\n%v\n}\n", expr, sT, sF)
 	}
 

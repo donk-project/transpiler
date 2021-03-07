@@ -28,6 +28,7 @@ go_library(
         "op_conversions.go",
         "predicates.go",
         "prefab.go",
+        "proc_calls.go",
         "registrar.go",
         "statement.go",
         "term.go",

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"snowfrost.garden/donk/transpiler/scope"
 	"github.com/golang/protobuf/proto"
+	"snowfrost.garden/donk/transpiler/scope"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
@@ -29,7 +29,7 @@ func (t Transformer) buildDeclFile() {
 	}
 	t.lastFileId++
 	t.curScope().CurDeclFile = declFile
-	t.curScope().CurDeclHeaders = scope.NewHeaderCollection() 
+	t.curScope().CurDeclHeaders = scope.NewHeaderCollection()
 	t.curScope().CurDeclFile.FileMetadata = &cctpb.FileMetadata{
 		FileId:     proto.Uint32(t.lastFileId),
 		SourcePath: proto.String(t.curScope().CurPath.FullyQualifiedString()),

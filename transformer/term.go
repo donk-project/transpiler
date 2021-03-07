@@ -95,15 +95,19 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 				panic(fmt.Sprintf("call with no identifier %v", proto.MarshalTextString(term.GetCall())))
 			}
 			if t.IsProcInCore(term.GetCall().GetS()) {
-				e = coreProcCall(term.GetCall().GetS())
-				fc := e.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression()
+				fn := term.GetCall().GetS()
+				rooted := "/" + fn
+				_, ok := knownSynchronousProcs[rooted]
+				invokeType := InvokeTypeAsyncProc
+				if ok {
+					invokeType = InvokeTypeSyncProc
+				}
 				var transformed []*cctpb.Expression
 				for _, ex := range term.GetCall().GetExpr() {
 					transformed = append(transformed, t.walkExpression(ex))
 				}
-				if len(transformed) > 0 {
-					addFuncInitListArg(fc, transformed...)
-				}
+				e = t.procCall(
+					genericCtxtCall("Global"), fn, transformed, invokeType)
 			} else {
 				// TODO: This is definitely wrong
 				fc := &cctpb.FunctionCallExpression{}
@@ -187,14 +191,11 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 
 	case term.GetLocate() != nil:
 		{
-			e = coreProcCall("locate")
 			var transformed []*cctpb.Expression
 			for _, arg := range term.GetLocate().GetArgs() {
 				transformed = append(transformed, t.walkExpression(arg))
 			}
-			addFuncInitListArg(
-				e.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(),
-				transformed...)
+			e = t.procCall(genericCtxtCall("Global"), "locate", transformed, InvokeTypeSyncProc)
 		}
 
 	case term.GetNew() != nil:
