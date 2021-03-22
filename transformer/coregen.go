@@ -31,11 +31,15 @@ func (t Transformer) buildCoretypeDecl() *cctpb.ClassDeclaration {
 	} else {
 		t.curScope().AddDeclHeader(
 			fmt.Sprintf("\"donk/api%v.h\"", t.curScope().CurPath.ParentPath().FullyQualifiedString()))
+		nsRoot := t.coreNamespace + "::"
+		if t.isCoreGen() {
+			nsRoot = nsRoot + "api::"
+		}
 		clsDecl.BaseSpecifiers = append(clsDecl.BaseSpecifiers,
 			&cctpb.BaseSpecifier{
 				AccessSpecifier: cctpb.AccessSpecifier_PUBLIC.Enum(),
 				ClassOrDecltype: &cctpb.Identifier{
-					Namespace: proto.String(t.coreNamespace + "::" + t.curScope().CurPath.ParentPath().AsNamespace()),
+					Namespace: proto.String(nsRoot + t.curScope().CurPath.ParentPath().AsNamespace()),
 					Id:        proto.String(t.curScope().CurPath.ParentPath().Basename + "_coretype"),
 				},
 			},
@@ -76,26 +80,12 @@ func (t Transformer) buildCoretypeDecl() *cctpb.ClassDeclaration {
 	})
 
 	clsDecl.MemberSpecifiers = append(clsDecl.MemberSpecifiers, &cctpb.MemberSpecification{
-		Value: &cctpb.MemberSpecification_AccessSpecifier{
-			*cctpb.AccessSpecifier_PROTECTED.Enum(),
-		},
-	})
-
-	t.curScope().AddDeclHeader("\"donk/core/interpreter.h\"")
-	clsDecl.MemberSpecifiers = append(clsDecl.MemberSpecifiers, &cctpb.MemberSpecification{
 		Value: &cctpb.MemberSpecification_Constructor{
 			&cctpb.Constructor{
 				ClassName: &cctpb.Identifier{
 					Id: proto.String(clsDecl.GetName()),
 				},
 				Arguments: []*cctpb.FunctionArgument{
-					&cctpb.FunctionArgument{
-						CppType: &cctpb.CppType{
-							PType: cctpb.CppType_SHARED_PTR.Enum(),
-							Name:  proto.String("donk::Interpreter"),
-						},
-						Name: proto.String("interpreter"),
-					},
 					&cctpb.FunctionArgument{
 						CppType: &cctpb.CppType{
 							PType: cctpb.CppType_NONE.Enum(),
@@ -277,13 +267,7 @@ func (t *Transformer) generateCoreConstructor() *cctpb.Constructor {
 		},
 		BlockDefinition: &cctpb.BlockDefinition{},
 	}
-	c.Arguments = append(c.Arguments, &cctpb.FunctionArgument{
-		CppType: &cctpb.CppType{
-			PType: cctpb.CppType_SHARED_PTR.Enum(),
-			Name:  proto.String("donk::Interpreter"),
-		},
-		Name: proto.String("interpreter"),
-	})
+
 	c.Arguments = append(c.Arguments, &cctpb.FunctionArgument{
 		CppType: &cctpb.CppType{
 			PType: cctpb.CppType_NONE.Enum(),
@@ -322,13 +306,6 @@ func (t *Transformer) generateCoreConstructor() *cctpb.Constructor {
 	mi.Expressions = append(mi.Expressions, &cctpb.Expression{
 		Value: &cctpb.Expression_IdentifierExpression{
 			&cctpb.Identifier{
-				Id: proto.String("interpreter"),
-			},
-		},
-	})
-	mi.Expressions = append(mi.Expressions, &cctpb.Expression{
-		Value: &cctpb.Expression_IdentifierExpression{
-			&cctpb.Identifier{
 				Id: proto.String("path"),
 			},
 		},
@@ -338,20 +315,17 @@ func (t *Transformer) generateCoreConstructor() *cctpb.Constructor {
 	if !t.curScope().CurPath.ParentPath().IsRoot() {
 		t.curScope().AddDefnHeader(
 			fmt.Sprintf("\"donk/api%v.h\"", t.curScope().CurPath.ParentPath().FullyQualifiedString()))
+		coreNs := t.coreNamespace
+		if t.isCoreGen() {
+			coreNs = coreNs + "::api"
+		}
 		mi := &cctpb.MemberInitializer{
 			Member: &cctpb.Identifier{
-				Namespace: proto.String(t.coreNamespace + "::" + t.curScope().CurPath.ParentPath().AsNamespace()),
+				Namespace: proto.String(coreNs + "::" + t.curScope().CurPath.ParentPath().AsNamespace()),
 				Id:        proto.String(t.curScope().CurPath.ParentPath().Basename + "_coretype"),
 			},
 		}
 
-		mi.Expressions = append(mi.Expressions, &cctpb.Expression{
-			Value: &cctpb.Expression_IdentifierExpression{
-				&cctpb.Identifier{
-					Id: proto.String("interpreter"),
-				},
-			},
-		})
 		mi.Expressions = append(mi.Expressions, &cctpb.Expression{
 			Value: &cctpb.Expression_IdentifierExpression{
 				&cctpb.Identifier{

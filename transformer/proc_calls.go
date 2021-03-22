@@ -4,13 +4,6 @@
 package transformer
 
 import (
-	// "fmt"
-	// "log"
-
-	// "github.com/golang/protobuf/proto"
-	// "snowfrost.garden/donk/transpiler/scope"
-
-	// astpb "snowfrost.garden/donk/proto/ast"
 	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )

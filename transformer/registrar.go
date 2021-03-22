@@ -6,10 +6,49 @@ package transformer
 import (
 	"fmt"
 
+	"snowfrost.garden/donk/transpiler/parser"
 	"github.com/golang/protobuf/proto"
 	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
+
+func ProcAccessToEnum(i parser.ProcAccess) *cctpb.Expression {
+	switch i {
+	case parser.ProcAccessUnknown:
+		{
+			panic("unknown procaccess should not be converted")
+		}
+	case parser.ProcAccessInView:
+		{
+			return vsk.IdExpr(vsk.NsId("donk", "proc_access::kInView"))
+		}
+	case parser.ProcAccessInOView:
+		{
+			return vsk.IdExpr(vsk.NsId("donk", "proc_access::kInOView"))
+		}
+	case parser.ProcAccessInUsrLoc:
+		{
+			return vsk.IdExpr(vsk.NsId("donk", "proc_access::kInUsrLoc"))
+		}
+	case parser.ProcAccessInUsr:
+		{
+			return vsk.IdExpr(vsk.NsId("donk", "proc_access::kInUsr"))
+		}
+	case parser.ProcAccessInWorld:
+		{
+			return vsk.IdExpr(vsk.NsId("donk", "proc_access::kInWorld"))
+		}
+	case parser.ProcAccessEqUsr:
+		{
+			return vsk.IdExpr(vsk.NsId("donk", "proc_access::kEqUsr"))
+		}
+	case parser.ProcAccessInGroup:
+		{
+			return vsk.IdExpr(vsk.NsId("donk", "proc_access::kInGroup"))
+		}
+	}
+	panic("unknown proc access")
+}
 
 func (t *Transformer) generateRegistrationFunction(namespace string) *cctpb.FunctionDefinition {
 	fnDefn := &cctpb.FunctionDefinition{}
@@ -40,6 +79,115 @@ func (t *Transformer) generateRegistrationFunction(namespace string) *cctpb.Func
 					},
 				},
 			})
+
+			if t.parser.DefaultProcFlags != proc.Flags {
+				aps := vsk.ObjMember(
+					vsk.StringIdExpr("iota"),
+					vsk.StringIdExpr("ProcSettings"))
+				apsC := &cctpb.Expression{
+					Value: &cctpb.Expression_FunctionCallExpression{
+						&cctpb.FunctionCallExpression{Name: aps},
+					},
+				}
+				vsk.AddFuncArg(apsC.GetFunctionCallExpression(), vsk.StringLiteralExpr(proc.Name))
+
+				pst := vsk.IdExpr(vsk.NsId("donk", "proc_settings_t"))
+				pstFC := &cctpb.Expression{
+					Value: &cctpb.Expression_FunctionCallExpression{
+						&cctpb.FunctionCallExpression{Name: pst},
+					},
+				}
+
+				var nFC *cctpb.FunctionCallExpression
+				if proc.Flags.Name != t.parser.DefaultProcFlags.Name {
+					nFC = &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("name")}
+					vsk.AddFuncArg(nFC, vsk.StringLiteralExpr(proc.Flags.Name))
+					pstFC = vsk.ObjMember(pstFC, &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{nFC},
+					})
+				}
+				if proc.Flags.Desc != t.parser.DefaultProcFlags.Desc {
+					nFC = &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("desc")}
+					vsk.AddFuncArg(nFC, vsk.StringLiteralExpr(proc.Flags.Desc))
+					pstFC = vsk.ObjMember(pstFC, &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{nFC},
+					})
+				}
+				if proc.Flags.Category != t.parser.DefaultProcFlags.Category {
+					nFC = &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("category")}
+					vsk.AddFuncArg(nFC, vsk.StringLiteralExpr(proc.Flags.Category))
+					pstFC = vsk.ObjMember(pstFC, &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{nFC},
+					})
+				}
+				if proc.Flags.Hidden != t.parser.DefaultProcFlags.Hidden {
+					nFC = &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("hidden")}
+					vsk.AddFuncArg(nFC, vsk.Bool(proc.Flags.Hidden))
+					pstFC = vsk.ObjMember(pstFC, &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{nFC},
+					})
+				}
+				if proc.Flags.PopupMenu != t.parser.DefaultProcFlags.PopupMenu {
+					nFC = &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("popup_menu")}
+					vsk.AddFuncArg(nFC, vsk.Bool(proc.Flags.PopupMenu))
+					pstFC = vsk.ObjMember(pstFC, &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{nFC},
+					})
+				}
+				if proc.Flags.Instant != t.parser.DefaultProcFlags.Instant {
+					nFC = &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("instant")}
+					vsk.AddFuncArg(nFC, vsk.Bool(proc.Flags.Instant))
+					pstFC = vsk.ObjMember(pstFC, &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{nFC},
+					})
+				}
+				if proc.Flags.Invisibility != t.parser.DefaultProcFlags.Invisibility {
+					nFC = &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("invisibility")}
+					vsk.AddFuncArg(nFC, vsk.IntLiteralExpr(int32(proc.Flags.Invisibility)))
+					pstFC = vsk.ObjMember(pstFC, &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{nFC},
+					})
+				}
+				if proc.Flags.Access != t.parser.DefaultProcFlags.Access {
+					if proc.Flags.Access == parser.ProcAccessUnknown {
+						panic("proc access explicitly set to unknown")
+					}
+
+					nFC = &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("access")}
+					vsk.AddFuncArg(nFC, ProcAccessToEnum(proc.Flags.Access))
+					pstFC = vsk.ObjMember(pstFC, &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{nFC},
+					})
+				}
+				if proc.Flags.Range != t.parser.DefaultProcFlags.Range {
+					nFC = &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("range")}
+					vsk.AddFuncArg(nFC, vsk.IntLiteralExpr(int32(proc.Flags.Range)))
+					pstFC = vsk.ObjMember(pstFC, &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{nFC},
+					})
+				}
+				if proc.Flags.Background != t.parser.DefaultProcFlags.Background {
+					nFC = &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("background")}
+					vsk.AddFuncArg(nFC, vsk.Bool(proc.Flags.Background))
+					pstFC = vsk.ObjMember(pstFC, &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{nFC},
+					})
+				}
+				if proc.Flags.WaitFor != t.parser.DefaultProcFlags.WaitFor {
+					nFC = &cctpb.FunctionCallExpression{Name: vsk.StringIdExpr("waitfor")}
+					vsk.AddFuncArg(nFC, vsk.Bool(proc.Flags.WaitFor))
+					pstFC = vsk.ObjMember(pstFC, &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{nFC},
+					})
+				}
+
+				vsk.AddFuncArg(apsC.GetFunctionCallExpression(), pstFC)
+				stmts = append(stmts, &cctpb.Statement{
+					Value: &cctpb.Statement_ExpressionStatement{apsC},
+				})
+
+			}
+
 		}
 	}
 

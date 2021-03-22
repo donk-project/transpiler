@@ -25,6 +25,26 @@ const (
 	ProcAccessInGroup
 )
 
+type ArgInputSchema struct {
+	Text        bool
+	Password    bool
+	Message     bool
+	CommandText bool
+	Num         bool
+	Icon        bool
+	Sound       bool
+	File        bool
+	Key         bool
+	Color       bool
+	Null        bool
+
+	Area     bool
+	Turf     bool
+	Obj      bool
+	Mob      bool
+	Anything bool
+}
+
 type ProcFlags struct {
 	Name         string
 	Desc         string
@@ -39,7 +59,28 @@ type ProcFlags struct {
 	WaitFor      bool
 }
 
-func DefaultProcFlags() ProcFlags {
+type ProcArg struct {
+	Name        string
+	InputSchema ArgInputSchema
+	InListExpr  *astpb.Expression
+}
+
+type ProcArgs struct {
+	args map[string]*ProcArg
+}
+
+func NewProcArgs() ProcArgs {
+	pa := ProcArgs{}
+	pa.args = make(map[string]*ProcArg)
+	return pa
+}
+
+func (pa ProcArgs) Add(name string, inputSchema ArgInputSchema, inListExpr *astpb.Expression) {
+	newPa := &ProcArg{Name: name, InputSchema: inputSchema, InListExpr: inListExpr}
+	pa.args[name] = newPa
+}
+
+func MakeDefaultProcFlags() ProcFlags {
 	flags := ProcFlags{
 		PopupMenu: true,
 		WaitFor:   true,
@@ -52,12 +93,57 @@ type DMProc struct {
 	Type  *DMType
 	Name  string
 	Proto *astpb.TypeProc
-	Decl  []string
 	Flags ProcFlags
+	Args  ProcArgs
 }
 
 func NewProc(s *Parser, t *DMType, n string, pb *astpb.TypeProc) *DMProc {
-	p := &DMProc{State: s, Type: t, Name: n, Proto: pb, Flags: DefaultProcFlags()}
+	p := &DMProc{State: s, Type: t, Name: n, Proto: pb, Flags: MakeDefaultProcFlags()}
+	p.Args = NewProcArgs()
+	selectedProcDef := p.Proto.Value[len(p.Proto.Value)-1]
+	for _, prm := range selectedProcDef.GetParameter() {
+		name := prm.GetName()
+		schema := ArgInputSchema{}
+		if prm.GetInputType() != nil {
+			for _, kn := range prm.GetInputType().GetKeyName() {
+				if kn == astpb.InputTypeKey_INPUT_TYPE_TEXT {
+					schema.Text = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_PASSWORD {
+					schema.Password = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_MESSAGE {
+					schema.Message = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_COMMAND_TEXT {
+					schema.CommandText = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_NUM {
+					schema.Num = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_ICON {
+					schema.Icon = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_SOUND {
+					schema.Sound = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_FILE {
+					schema.File = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_KEY {
+					schema.Key = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_COLOR {
+					schema.Color = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_NULL {
+					schema.Null = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_AREA {
+					schema.Area = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_TURF {
+					schema.Turf = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_OBJ {
+					schema.Obj = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_MOB {
+					schema.Mob = true
+				} else if kn == astpb.InputTypeKey_INPUT_TYPE_ANYTHING {
+					schema.Anything = true
+				}
+			}
+		}
+		inListExpr := prm.GetInList()
+		p.Args.Add(name, schema, inListExpr)
+	}
 	return p
 }
 
@@ -123,16 +209,4 @@ func (d *DMProc) Block(idx int) *astpb.Block {
 
 func (d *DMProc) ProcPath() *paths.Path {
 	return d.Type.Path.Child(d.Name)
-}
-
-func (p *Parser) ParseProcs(g *astpb.Graph, tbp *map[paths.Path]*DMType) {
-	for _, dmType := range *tbp {
-		for k, pb := range dmType.Proto.GetProcs() {
-			if !dmType.IsProcRegistered(k) {
-				proc := NewProc(p, dmType, k, pb)
-				p.ProcsByPath[*proc.ProcPath()] = proc
-				dmType.Procs = append(dmType.Procs, proc)
-			}
-		}
-	}
 }

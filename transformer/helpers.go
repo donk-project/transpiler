@@ -5,11 +5,11 @@ package transformer
 
 import (
 	"fmt"
-	// "log"
 
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/paths"
+	"snowfrost.garden/donk/transpiler/parser"
 	"snowfrost.garden/donk/transpiler/scope"
 	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
@@ -432,6 +432,17 @@ func rawInt(expr *astpb.Expression) int32 {
 	panic(fmt.Sprintf("asked for raw int of unsupported expression %v", proto.MarshalTextString(expr)))
 }
 
+func rawString(expr *astpb.Expression) string {
+	if expr.GetBase().GetTerm().StringT != nil {
+		return expr.GetBase().GetTerm().GetStringT()
+	}
+	if expr.GetBase().GetTerm().GetExpr() != nil {
+		return rawString(expr.GetBase().GetTerm().GetExpr())
+	}
+
+	panic(fmt.Sprintf("asked for raw string of unsupported expression %v", proto.MarshalTextString(expr)))
+}
+
 func (t Transformer) isSleep(s *astpb.Statement) bool {
 	call := s.GetExpr().GetBase().GetTerm().GetCall()
 	if call == nil {
@@ -466,6 +477,7 @@ func (t Transformer) makeApiFuncDecl(name string) *cctpb.FunctionDeclaration {
 			Name:  proto.String("donk::running_proc"),
 		},
 	}
+
 	t.curScope().AddDeclHeader("\"cppcoro/generator.hpp\"")
 	t.curScope().AddDeclHeader("\"donk/core/procs.h\"")
 
@@ -486,5 +498,12 @@ func (t Transformer) makeApiFuncDecl(name string) *cctpb.FunctionDeclaration {
 				Name:  proto.String("donk::proc_args_t"),
 			},
 		})
+
 	return fd
+}
+
+func (t Transformer) transformProcFlags(flags parser.ProcFlags) *cctpb.Statement {
+	result := &cctpb.Statement{}
+
+	return result
 }

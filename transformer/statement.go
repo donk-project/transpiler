@@ -8,6 +8,7 @@ import (
 	"log"
 
 	"github.com/golang/protobuf/proto"
+	"snowfrost.garden/donk/transpiler/parser"
 	"snowfrost.garden/donk/transpiler/scope"
 
 	astpb "snowfrost.garden/donk/proto/ast"
@@ -287,6 +288,7 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 
 	case s.GetReturnS() != nil:
 		{
+			t.curScope().ReturnFound = true
 			fce := genericCtxtCall("Result")
 			if s.GetReturnS().GetExpr() != nil {
 				vsk.AddFuncArg(fce.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), t.walkExpression(s.GetReturnS().GetExpr()))
@@ -356,6 +358,26 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 				stmt.Value = &cctpb.Statement_IfStatement{last}
 				return stmt
 			}
+		}
+	case s.GetSetting() != nil:
+		{
+			if s.GetSetting().GetName() == "src" {
+				if s.GetSetting().GetMode() == astpb.SettingMode_SETTING_MODE_IN {
+					if s.GetSetting().GetValue().GetBase().GetTerm().GetCall().GetS() == "oview" {
+						r := rawInt(s.GetSetting().GetValue().GetBase().GetTerm().GetCall().GetExpr()[0])
+						t.curScope().CurProc.Flags.Range = int(r)
+						t.curScope().CurProc.Flags.Access = parser.ProcAccessInOView
+						return stmt
+					}
+				}
+			} else if s.GetSetting().GetName() == "name" {
+				if s.GetSetting().GetMode() == astpb.SettingMode_SETTING_MODE_ASSIGN {
+					name := rawString(s.GetSetting().GetValue())
+					t.curScope().CurProc.Flags.Name = name
+					return stmt
+				}
+			}
+			panic(fmt.Sprintf("cannot transform unsupported setting: %v", proto.MarshalTextString(s)))
 		}
 
 	}

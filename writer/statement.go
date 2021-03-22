@@ -12,7 +12,6 @@ import (
 )
 
 func printStatement(s *cctpb.Statement) string {
-	fmt.Printf("==============================\nCCTPB Statement:\n %v==============================\n", proto.MarshalTextString(s))
 	switch s.Value.(type) {
 	case *cctpb.Statement_ExpressionStatement:
 		return printExpression(s.GetExpressionStatement()) + ";"
@@ -32,6 +31,8 @@ func printStatement(s *cctpb.Statement) string {
 		return printCompoundStatement(s.GetCompoundStatement())
 	case *cctpb.Statement_CoYield:
 		return printCoYield(s.GetCoYield())
+	case *cctpb.Statement_CoReturn:
+		return printCoReturn(s.GetCoReturn())
 	case nil:
 		panic("nil statment")
 	default:
@@ -41,6 +42,13 @@ func printStatement(s *cctpb.Statement) string {
 
 func printCoYield(cy *cctpb.CoYield) string {
 	return fmt.Sprintf("co_yield %v;", printExpression(cy.GetExpr()))
+}
+
+func printCoReturn(cr *cctpb.CoReturn) string {
+	if cr.GetExpr() != nil {
+		return fmt.Sprintf("co_return %v;", printExpression(cr.GetExpr()))
+	}
+	return "co_return;"
 }
 
 func printReturnStatement(r *cctpb.ReturnStatement) string {

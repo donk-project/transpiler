@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"strings"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/protobuf/proto"
@@ -14,6 +15,7 @@ import (
 	"snowfrost.garden/donk/transpiler/parser"
 	"snowfrost.garden/donk/transpiler/paths"
 	"snowfrost.garden/donk/transpiler/scope"
+	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
@@ -136,10 +138,15 @@ func (t Transformer) scan(p paths.Path, typ *parser.DMType) {
 	t.buildDeclFile()
 	t.buildDefnFile()
 
-	ns := proto.String(t.coreNamespace + "::" + p.AsNamespace())
-	if p.IsRoot() {
-		ns = proto.String(t.coreNamespace)
+	var nsStr string = t.coreNamespace
+	if t.isCoreGen() {
+		nsStr = nsStr + "::api"
 	}
+	if !p.IsRoot() {
+		nsStr = nsStr + "::" + p.AsNamespace()
+	}
+
+	ns := proto.String(nsStr)
 
 	nsDecl := &cctpb.NamespacedDeclaration{
 		Namespace: ns,
@@ -160,6 +167,19 @@ func (t Transformer) scan(p paths.Path, typ *parser.DMType) {
 			procCount++
 			funcDefn := t.makeFuncDefn(dmproc)
 			funcDefn.Declaration = funcDecl
+			if t.isCoreGen() {
+				fc := vsk.FuncCall(vsk.Id("Unimplemented"))
+				procStrName := strings.Replace(
+					t.curScope().CurType.Path.FullyQualifiedString()+"/proc/"+dmproc.Name, "//", "/", -1)
+				vsk.AddFuncArg(fc.GetFunctionCallExpression(), vsk.StringLiteralExpr(procStrName))
+				funcDefn.BlockDefinition = &cctpb.BlockDefinition{}
+				coYield := &cctpb.CoYield{
+					Expr: vsk.ObjMember(vsk.StringIdExpr("ctxt"), fc),
+				}
+				funcDefn.BlockDefinition.Statements = append(funcDefn.BlockDefinition.Statements, &cctpb.Statement{
+					Value: &cctpb.Statement_CoYield{coYield},
+				})
+			}
 			nsDefn.FunctionDefinitions = append(nsDefn.FunctionDefinitions, funcDefn)
 		}
 	}
@@ -255,7 +275,18 @@ func (t Transformer) makeFuncDefn(p *parser.DMProc) *cctpb.FunctionDefinition {
 	if proc.GetCode().GetInvalid() {
 		log.Printf("===================\nInvalid code block found: \n%v\n\n", proto.MarshalTextString(proc.GetCode()))
 	}
+	log.Printf("========================= Proc Definition =========================\n")
+	for _, prm := range proc.GetParameter() {
+		log.Printf("\n%v\n", proto.MarshalTextString(prm))
+	}
 	funcDefn.BlockDefinition = t.walkBlock(proc.GetCode().GetPresent())
+
+	if !t.curScope().ReturnFound {
+		funcDefn.BlockDefinition.Statements = append(funcDefn.BlockDefinition.Statements,
+			&cctpb.Statement{
+				Value: &cctpb.Statement_CoReturn{},
+			})
+	}
 
 	t.PopScope()
 	return funcDefn
@@ -294,9 +325,13 @@ func (t Transformer) makeFuncDecl(p *parser.DMProc) *cctpb.FunctionDeclaration {
 }
 
 func (t Transformer) walkBlock(block *astpb.Block) *cctpb.BlockDefinition {
+	emptyStmt := &cctpb.Statement{}
 	blockDef := &cctpb.BlockDefinition{}
 	for _, stmt := range block.GetStatement() {
-		blockDef.Statements = append(blockDef.Statements, t.walkStatement(stmt))
+		walked := t.walkStatement(stmt)
+		if !proto.Equal(walked, emptyStmt) {
+			blockDef.Statements = append(blockDef.Statements, walked)
+		}
 	}
 	return blockDef
 }
