@@ -5,6 +5,7 @@ package parser
 
 import (
 	"fmt"
+	// "log"
 	"strings"
 
 	"github.com/golang/protobuf/proto"

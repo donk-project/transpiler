@@ -5,6 +5,7 @@ package parser
 
 import (
 	"sort"
+	// "log"
 
 	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/paths"

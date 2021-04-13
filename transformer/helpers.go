@@ -8,8 +8,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
-	"snowfrost.garden/donk/transpiler/paths"
 	"snowfrost.garden/donk/transpiler/parser"
+	"snowfrost.garden/donk/transpiler/paths"
 	"snowfrost.garden/donk/transpiler/scope"
 	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
@@ -87,10 +87,6 @@ func getObjFunc(f string) *cctpb.Expression {
 	}
 }
 
-func declareVar(name string) *cctpb.Declaration {
-	return vsk.VarDecl(name, vsk.NsId("donk", "var_t"))
-}
-
 func resourceId(resource string) *cctpb.Expression {
 	i := vsk.NsId("donk", "resource_t")
 	fc := &cctpb.FunctionCallExpression{
@@ -165,31 +161,6 @@ func coreProcCall(name string) *cctpb.Expression {
 		}},
 	})
 	return core
-}
-
-func (t Transformer) isVarAssignFromPtr(e *cctpb.Expression) bool {
-	if e.GetMemberAccessExpression() != nil {
-		mae := e.GetMemberAccessExpression()
-		if !proto.Equal(mae.GetLhs(), ctxtSrc()) && !proto.Equal(mae.GetLhs(), ctxtUsr()) {
-			return false
-		}
-
-		if mae.GetRhs().GetFunctionCallExpression().GetName().GetIdentifierExpression().GetId() == "v" {
-			return true
-		}
-	}
-
-	if isRawIdentifier(e) {
-		rId := rawIdentifier(e)
-		if t.curScope().HasField(rId) && t.curScope().VarType(rId) == scope.VarTypeDMObject {
-			return true
-		}
-		if t.curScope().HasLocal(rId) && t.curScope().VarType(rId) == scope.VarTypeDMObject {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (t Transformer) isDMObject(e *cctpb.Expression) bool {
@@ -274,6 +245,12 @@ func VarDeclAndInitializer(name string, ident *cctpb.Identifier, init *cctpb.Ini
 }
 
 func (t *Transformer) declareVarWithVal(name string, val *cctpb.Expression, varType scope.VarType) *cctpb.Statement {
+	typeName := "auto"
+
+	if varType == scope.VarTypeCalledProc {
+		typeName = "donk::running_proc_info"
+	}
+
 	ds := &cctpb.DeclarationSpecifier{
 		Value: &cctpb.DeclarationSpecifier_TypeSpecifier{
 			&cctpb.TypeSpecifier{
@@ -281,7 +258,7 @@ func (t *Transformer) declareVarWithVal(name string, val *cctpb.Expression, varT
 					&cctpb.SimpleTypeSpecifier{
 						Value: &cctpb.SimpleTypeSpecifier_DeclaredName{
 							&cctpb.Identifier{
-								Id: proto.String("auto"),
+								Id: proto.String(typeName),
 							},
 						},
 					},
@@ -292,7 +269,7 @@ func (t *Transformer) declareVarWithVal(name string, val *cctpb.Expression, varT
 	if isStringLiteral(val) {
 		if varType == scope.VarTypeDMObject {
 			t.curScope().AddDefnHeader("\"donk/core/vars.h\"")
-			vstr := vsk.NsId("donk", "var_t::str")
+			vstr := vsk.NsId("donk", "var_t")
 			fc := vsk.FuncCall(vstr)
 			vsk.AddFuncArg(fc.GetFunctionCallExpression(), val)
 			val = fc
@@ -456,14 +433,18 @@ func (t Transformer) isSleep(s *astpb.Statement) bool {
 
 func (t Transformer) astpbSleepToCctpbSleep(s *astpb.Statement) *cctpb.Statement {
 	ticks := rawInt(s.GetExpr().GetBase().GetTerm().GetCall().GetExpr()[0])
-	fc := vsk.FuncCall(vsk.Id("sleep"))
+	fc := vsk.FuncCall(vsk.Id("Sleep"))
 	vsk.AddFuncArg(fc.GetFunctionCallExpression(), vsk.IntLiteralExpr(ticks))
 	ctxt := vsk.StringIdExpr("ctxt")
 	mae := vsk.ObjMember(ctxt, fc)
 	return &cctpb.Statement{
-		Value: &cctpb.Statement_CoYield{
-			&cctpb.CoYield{
-				Expr: mae,
+		Value: &cctpb.Statement_ExpressionStatement{
+			&cctpb.Expression{
+				Value: &cctpb.Expression_CoYield{
+					&cctpb.CoYield{
+						Expression: mae,
+					},
+				},
 			},
 		},
 	}
@@ -478,7 +459,6 @@ func (t Transformer) makeApiFuncDecl(name string) *cctpb.FunctionDeclaration {
 		},
 	}
 
-	t.curScope().AddDeclHeader("\"cppcoro/generator.hpp\"")
 	t.curScope().AddDeclHeader("\"donk/core/procs.h\"")
 
 	fd.Arguments = append(fd.Arguments,

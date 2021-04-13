@@ -10,6 +10,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/paths"
+	"snowfrost.garden/donk/transpiler/scope"
 	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
@@ -96,32 +97,39 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 			}
 			if t.IsProcInCore(term.GetCall().GetS()) {
 				fn := term.GetCall().GetS()
-				rooted := "/" + fn
-				_, ok := knownSynchronousProcs[rooted]
-				invokeType := InvokeTypeAsyncProc
-				if ok {
-					invokeType = InvokeTypeSyncProc
-				}
 				var transformed []*cctpb.Expression
 				for _, ex := range term.GetCall().GetExpr() {
 					transformed = append(transformed, t.walkExpression(ex))
 				}
-				e = t.procCall(
-					genericCtxtCall("Global"), fn, transformed, invokeType)
+				fc := genericCtxtCall("Gproc")
+				vsk.AddFuncArg(fc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), vsk.StringLiteralExpr(fn))
+				vsk.AddFuncInitListArg(fc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), transformed...)
+				e = fc
 			} else {
-				// TODO: This is definitely wrong
-				fc := &cctpb.FunctionCallExpression{}
-				fc.Name = &cctpb.Expression{
-					Value: &cctpb.Expression_IdentifierExpression{
-						&cctpb.Identifier{
-							Id: proto.String(term.GetCall().GetS()),
+				fn := term.GetCall().GetS()
+				var transformed []*cctpb.Expression
+				for _, ex := range term.GetCall().GetExpr() {
+					expr := t.walkExpression(ex)
+					if expr.GetIdentifierExpression() != nil {
+						if t.curScope().HasLocal(expr.GetIdentifierExpression().GetId()) &&
+							t.curScope().VarType(expr.GetIdentifierExpression().GetId()) == scope.VarTypeCalledProc {
+							t.curScope().AddDefnHeader("\"donk/interpreter/scheduler.h\"")
+							expr = wrapCoYieldInRetValRetriever(expr)
+						}
+					}
+					transformed = append(transformed, expr)
+				}
+				fc := genericCtxtCall("ChildProc")
+				vsk.AddFuncArg(fc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), genericCtxtCall("Global"))
+				vsk.AddFuncArg(fc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), vsk.StringLiteralExpr(fn))
+				vsk.AddFuncInitListArg(fc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), transformed...)
+				e = &cctpb.Expression{
+					Value: &cctpb.Expression_CoYield{
+						&cctpb.CoYield{
+							Expression: fc,
 						},
 					},
 				}
-				for _, ex := range term.GetCall().GetExpr() {
-					vsk.AddFuncArg(fc, t.walkExpression(ex))
-				}
-				e.Value = &cctpb.Expression_FunctionCallExpression{fc}
 			}
 		}
 
@@ -154,14 +162,25 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 			for _, collection := range is.GetCollections() {
 				if collection.GetExpr() != nil {
 					colExpr := t.walkExpression(collection.GetExpr())
-					if !isRawLiteral(colExpr) {
+					if colExpr.GetIdentifierExpression() != nil {
+						if t.curScope().HasLocal(colExpr.GetIdentifierExpression().GetId()) &&
+							t.curScope().VarType(colExpr.GetIdentifierExpression().GetId()) == scope.VarTypeCalledProc {
+							t.curScope().AddDefnHeader("\"donk/interpreter/scheduler.h\"")
+							formatArgs = append(formatArgs, wrapCoYieldInRetValRetriever(colExpr))
+						}
+					} else if !isRawLiteral(colExpr) {
 						ue := &cctpb.UnaryExpression{
 							Operator: cctpb.UnaryExpression_POINTER_INDIRECTION.Enum(),
 							Operand:  colExpr,
 						}
-						formatArgs = append(formatArgs, &cctpb.Expression{
-							Value: &cctpb.Expression_UnaryExpression{ue},
-						})
+						if colExpr.GetCoYield() != nil {
+							t.curScope().AddDefnHeader("\"donk/interpreter/scheduler.h\"")
+							formatArgs = append(formatArgs, wrapCoYieldInRetValRetriever(colExpr))
+						} else {
+							formatArgs = append(formatArgs, &cctpb.Expression{
+								Value: &cctpb.Expression_UnaryExpression{ue},
+							})
+						}
 					} else {
 						formatArgs = append(formatArgs, colExpr)
 					}
@@ -195,7 +214,10 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 			for _, arg := range term.GetLocate().GetArgs() {
 				transformed = append(transformed, t.walkExpression(arg))
 			}
-			e = t.procCall(genericCtxtCall("Global"), "locate", transformed, InvokeTypeSyncProc)
+
+			e = genericCtxtCall("Gproc")
+			vsk.AddFuncArg(e.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), vsk.StringLiteralExpr("locate"))
+			vsk.AddFuncInitListArg(e.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), transformed...)
 		}
 
 	case term.GetNew() != nil:
@@ -244,4 +266,9 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 	}
 
 	return e
+}
+
+func wrapCoYieldInRetValRetriever(e *cctpb.Expression) *cctpb.Expression {
+	pTask := vsk.ObjMember(vsk.PtrIndirect(e), vsk.StringIdExpr("parent_task"))
+	return vsk.PtrMember(pTask, vsk.StringIdExpr("subtask_result_"))
 }

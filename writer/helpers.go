@@ -16,16 +16,16 @@ var UNARY_OP_FORMATTERS = map[cctpb.UnaryExpression_Operator]string{
 }
 
 var ARITHMETIC_OP_FORMATTERS = map[cctpb.ArithmeticExpression_Operator]string{
-	cctpb.ArithmeticExpression_ADDITION:       "%v->operator+(%v)",
-	cctpb.ArithmeticExpression_SUBTRACTION:    "%v->operator-(%v)",
-	cctpb.ArithmeticExpression_MULTIPLICATION: "%v->operator*(%v)",
-	cctpb.ArithmeticExpression_DIVISION:       "%v->operator/(%v)",
-	cctpb.ArithmeticExpression_MODULO:         "%v->operator%%(%v)",
-	cctpb.ArithmeticExpression_BITWISE_AND:    "%v->operator&(%v)",
-	cctpb.ArithmeticExpression_BITWISE_OR:     "%v->operator|(%v)",
-	cctpb.ArithmeticExpression_BITWISE_XOR:    "%v->operator^(%v)",
-	cctpb.ArithmeticExpression_BITWISE_LSHIFT: "%v->operator<<(%v)",
-	cctpb.ArithmeticExpression_BITWISE_RSHIFT: "%v->operator>>(%v)",
+	cctpb.ArithmeticExpression_ADDITION:       "%v + %v",
+	cctpb.ArithmeticExpression_SUBTRACTION:    "%v - %v",
+	cctpb.ArithmeticExpression_MULTIPLICATION: "%v * %v",
+	cctpb.ArithmeticExpression_DIVISION:       "%v / %v",
+	cctpb.ArithmeticExpression_MODULO:         "%v %% %v",
+	cctpb.ArithmeticExpression_BITWISE_AND:    "%v & %v",
+	cctpb.ArithmeticExpression_BITWISE_OR:     "%v | %v",
+	cctpb.ArithmeticExpression_BITWISE_XOR:    "%v ^ %v",
+	cctpb.ArithmeticExpression_BITWISE_LSHIFT: "%v << %v",
+	cctpb.ArithmeticExpression_BITWISE_RSHIFT: "%v >> %v",
 }
 
 var ASSIGNMENT_OP_FORMATTERS = map[cctpb.AssignmentExpression_Operator]string{
@@ -78,7 +78,7 @@ var VIRT_SPECIFIERS = map[cctpb.VirtSpecifier_Keyword]string{
 	cctpb.VirtSpecifier_FINAL_OVERRIDE: "final override",
 }
 
-func (w Writer) printCppType(t *cctpb.CppType) string {
+func printCppType(t *cctpb.CppType) string {
 	switch t.GetPType() {
 	case cctpb.CppType_NONE:
 		return t.GetName()
@@ -97,13 +97,13 @@ func (w Writer) printCppType(t *cctpb.CppType) string {
 func (w Writer) joinArgs(fas []*cctpb.FunctionArgument) string {
 	var result []string
 	for _, fa := range fas {
-		result = append(result, w.printFuncArg(fa))
+		result = append(result, printFuncArg(fa))
 	}
 	return strings.Join(result, ", ")
 }
 
-func (w Writer) printFuncArg(fa *cctpb.FunctionArgument) string {
-	return fmt.Sprintf("%v %v", w.printCppType(fa.GetCppType()), fa.GetName())
+func printFuncArg(fa *cctpb.FunctionArgument) string {
+	return fmt.Sprintf("%v %v", printCppType(fa.GetCppType()), fa.GetName())
 }
 
 func printBaseSpecifiers(bss []*cctpb.BaseSpecifier) string {

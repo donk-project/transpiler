@@ -22,11 +22,24 @@ import (
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 
+type WriteMode int
+
+const (
+	WriteModeUnknown WriteMode = iota
+	WriteModeSources
+	WriteModeHeaders
+)
+
 func main() {
 	outputPath := flag.String("output_path", "", "Directory for generated output")
 	inputProto := flag.String("input_proto", "", "Location of input binarypb")
-	// `dtpo` simply stands for Donk Transpiler Project Output.
+	// Change this if you want the C++ representation of your Dreammaker project
+	// to have a different root name. `dtpo` is a vague allusion to 'tgstation'
+	// and '.cc', the C++ definition file extension.
 	projectName := flag.String("project_name", "dtpo", "Name of generated C++ project (filename friendly)")
+	writeModeFlag := flag.String("write_mode", "", "Write mode")
+	writeMode := WriteModeUnknown
+
 	flag.Parse()
 
 	if *outputPath == "" {
@@ -37,6 +50,17 @@ func main() {
 	}
 	if *projectName == "" {
 		panic("No --project_name specified")
+	}
+	if *writeModeFlag == "" {
+		panic("No --write_mode specified")
+	} else {
+		if *writeModeFlag == "sources" {
+			writeMode = WriteModeSources
+		} else if *writeModeFlag == "headers" {
+			writeMode = WriteModeHeaders
+		} else {
+			panic("--write_mode " + *writeModeFlag + " not valid")
+		}
 	}
 
 	if *cpuprofile != "" {
@@ -66,11 +90,15 @@ func main() {
 	duration := time.Since(start)
 	log.Printf("%6.2fs parsing", duration.Seconds())
 
-	t := transformer.New(p, *projectName, *projectName)
+	t := transformer.New(p, "dtpo", *projectName)
 	t.BeginTransform()
 
 	w := writer.New(t.Project(), *outputPath)
-	w.WriteOutput()
+	if writeMode == WriteModeSources {
+		w.WriteSources()
+	} else if writeMode == WriteModeHeaders {
+		w.WriteHeaders()
+	}
 
 	ctxt := writer.RegistrarContext{
 		CoreNamespace:        t.CoreNamespace(),
@@ -81,7 +109,11 @@ func main() {
 		AffectedPaths:        t.AffectedPaths(),
 	}
 
-	writer.WriteTypeRegistrar(ctxt)
+	if writeMode == WriteModeSources {
+		writer.WriteTypeRegistrarSources(ctxt)
+	} else if writeMode == WriteModeHeaders {
+		writer.WriteTypeRegistrarHeaders(ctxt)
+	}
 
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)

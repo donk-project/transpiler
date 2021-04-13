@@ -23,6 +23,7 @@ const (
 	VarTypePrefab
 	VarTypeList
 	VarTypeListIterator
+	VarTypeCalledProc
 )
 
 func (v VarType) String() string {
@@ -98,6 +99,7 @@ type ScopeCtxt struct {
 	parentScope    *ScopeCtxt
 	currentDepth   int
 	ReturnFound    bool
+	InSpawn        bool
 }
 
 func (s *ScopeCtxt) AddScopedVar(vr VarInScope) {

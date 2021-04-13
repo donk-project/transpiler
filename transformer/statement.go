@@ -5,7 +5,7 @@ package transformer
 
 import (
 	"fmt"
-	"log"
+	// "log"
 
 	"github.com/golang/protobuf/proto"
 	"snowfrost.garden/donk/transpiler/parser"
@@ -28,7 +28,7 @@ var knownSynchronousProcs = map[string]bool{
 
 func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 	stmt := &cctpb.Statement{}
-	log.Printf("=========================== ASTPB STATEMENT ========================\n%v\n", proto.MarshalTextString(s))
+	// log.Printf("=========================== ASTPB STATEMENT ========================\n%v\n", proto.MarshalTextString(s))
 	if s == nil {
 		return stmt
 	}
@@ -61,52 +61,39 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 					Name:  s.GetVar().GetName(),
 					Scope: scope.VarScopeLocal,
 				}
-				if isRawInt(s.GetVar().GetValue()) {
-					vr.Type = scope.VarTypeInt
-				}
-				if isRawString(s.GetVar().GetValue()) {
-					vr.Type = scope.VarTypeDMObject
-				}
-				if s.GetVar().GetValue().GetBase().GetTerm().GetCall() != nil {
-					vr.Type = scope.VarTypeDMObject
-					if s.GetVar().GetValue().GetBase().GetTerm().GetCall().S != nil {
-						fn := s.GetVar().GetValue().GetBase().GetTerm().GetCall().GetS()
-						if t.IsProcInCore(fn) {
-							var exprs []*cctpb.Expression
-							for _, ex := range s.GetVar().GetValue().GetBase().GetTerm().GetCall().GetExpr() {
-								exprs = append(exprs, t.walkExpression(ex))
-							}
-							rooted := "/" + fn
-							_, ok := knownSynchronousProcs[rooted]
-							if ok {
-								invokeType := InvokeTypeSyncProc
-								pc := t.procCall(genericCtxtCall("Global"), fn, exprs, invokeType)
-								t.curScope().AddScopedVar(vr)
-								return t.declareVarWithVal(s.GetVar().GetName(), pc, vr.Type)
-							} else {
-								invokeType := InvokeTypeChildProc
-								// Here is where we need to create two statements:
-								// One co_yields the asynchronous proc as a child proc
-								// The other assigns the value to the newly created var
-								coYield := &cctpb.CoYield{
-									Expr: t.procCall(genericCtxtCall("Global"), fn, exprs, invokeType),
-								}
-								childResult := genericCtxtCall("ChildResult")
-								applyVal := t.declareVarWithVal(s.GetVar().GetName(), childResult, vr.Type)
-								return &cctpb.Statement{
-									Value: &cctpb.Statement_CompoundStatement{
-										&cctpb.CompoundStatement{
-											Statements: []*cctpb.Statement{
-												&cctpb.Statement{
-													Value: &cctpb.Statement_CoYield{coYield},
-												},
-												applyVal,
-											},
-										},
-									},
-								}
-							}
+				vr.Type = scope.VarTypeDMObject
+
+				if s.GetVar().GetValue().GetBase().GetTerm().GetCall() != nil &&
+					s.GetVar().GetValue().GetBase().GetTerm().GetCall().S != nil {
+					fn := s.GetVar().GetValue().GetBase().GetTerm().GetCall().GetS()
+					if t.IsProcInCore(fn) {
+						var exprs []*cctpb.Expression
+						for _, ex := range s.GetVar().GetValue().GetBase().GetTerm().GetCall().GetExpr() {
+							exprs = append(exprs, t.walkExpression(ex))
 						}
+						pc := genericCtxtCall("Gproc")
+						vsk.AddFuncArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), vsk.StringLiteralExpr(fn))
+						vsk.AddFuncInitListArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), exprs...)
+						t.curScope().AddScopedVar(vr)
+						return t.declareVarWithVal(s.GetVar().GetName(), pc, vr.Type)
+					} else {
+						vr.Type = scope.VarTypeCalledProc
+						var exprs []*cctpb.Expression
+						for _, ex := range s.GetVar().GetValue().GetBase().GetTerm().GetCall().GetExpr() {
+							exprs = append(exprs, t.walkExpression(ex))
+						}
+						pc := genericCtxtCall("ChildProc")
+						vsk.AddFuncArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), genericCtxtCall("Global"))
+						vsk.AddFuncArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), vsk.StringLiteralExpr(fn))
+						vsk.AddFuncInitListArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), exprs...)
+						t.curScope().AddScopedVar(vr)
+						return t.declareVarWithVal(s.GetVar().GetName(), &cctpb.Expression{
+							Value: &cctpb.Expression_CoYield{
+								&cctpb.CoYield{
+									Expression: pc,
+								},
+							},
+						}, vr.Type)
 					}
 				}
 				t.curScope().AddScopedVar(vr)
@@ -289,7 +276,7 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 	case s.GetReturnS() != nil:
 		{
 			t.curScope().ReturnFound = true
-			fce := genericCtxtCall("Result")
+			fce := genericCtxtCall("SetResult")
 			if s.GetReturnS().GetExpr() != nil {
 				vsk.AddFuncArg(fce.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), t.walkExpression(s.GetReturnS().GetExpr()))
 			}
@@ -378,6 +365,57 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 				}
 			}
 			panic(fmt.Sprintf("cannot transform unsupported setting: %v", proto.MarshalTextString(s)))
+		}
+	case s.GetSpawn() != nil:
+		{
+			t.curScope().AddDeclHeader("\"donk/core/procs.h\"")
+
+			spawnCall := vsk.ObjMember(vsk.StringIdExpr("ctxt"), vsk.FuncCall(vsk.Id("Spawn")))
+			lambda := &cctpb.LambdaExpression{}
+
+			vsk.AddFuncArg(spawnCall.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), &cctpb.Expression{
+				Value: &cctpb.Expression_LambdaExpression{lambda},
+			})
+
+			vsk.AddFuncArg(
+				spawnCall.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(),
+				vsk.StringIdExpr("args"),
+			)
+
+			lambda.TrailingReturnType = &cctpb.CppType{
+				PType: cctpb.CppType_NONE.Enum(),
+				Name:  proto.String("donk::running_proc"),
+			}
+
+			lambda.Arguments = append(lambda.Arguments,
+				&cctpb.FunctionArgument{
+					Name: proto.String("ctxt"),
+					CppType: &cctpb.CppType{
+						PType: cctpb.CppType_REFERENCE.Enum(),
+						Name:  proto.String("donk::proc_ctxt_t"),
+					},
+				})
+
+			lambda.Arguments = append(lambda.Arguments,
+				&cctpb.FunctionArgument{
+					Name: proto.String("args"),
+					CppType: &cctpb.CppType{
+						PType: cctpb.CppType_REFERENCE.Enum(),
+						Name:  proto.String("donk::proc_args_t"),
+					},
+				})
+
+			lambda.Body = &cctpb.BlockDefinition{}
+			t.PushScope()
+			t.curScope().InSpawn = true
+			for _, stmt := range s.GetSpawn().GetBlock().GetStatement() {
+				lambda.Body.Statements = append(lambda.Body.Statements, t.walkStatement(stmt))
+			}
+			t.PopScope()
+
+			return &cctpb.Statement{
+				Value: &cctpb.Statement_ExpressionStatement{spawnCall},
+			}
 		}
 
 	}

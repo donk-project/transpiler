@@ -105,7 +105,7 @@ func printSimpleTypeSpecifier(sts *cctpb.SimpleTypeSpecifier) string {
 
 func (w Writer) printFunctionDeclaration(fd *cctpb.FunctionDeclaration) string {
 	fs := "%v %v(%v)"
-	cppType := w.printCppType(fd.GetReturnType())
+	cppType := printCppType(fd.GetReturnType())
 	name := fd.GetName()
 	args := w.joinArgs(fd.Arguments)
 	if fd.GetMemberOf() != nil {

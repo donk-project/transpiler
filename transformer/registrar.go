@@ -5,9 +5,10 @@ package transformer
 
 import (
 	"fmt"
+	// "log"
 
-	"snowfrost.garden/donk/transpiler/parser"
 	"github.com/golang/protobuf/proto"
+	"snowfrost.garden/donk/transpiler/parser"
 	vsk "snowfrost.garden/vasker"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
@@ -185,6 +186,32 @@ func (t *Transformer) generateRegistrationFunction(namespace string) *cctpb.Func
 				stmts = append(stmts, &cctpb.Statement{
 					Value: &cctpb.Statement_ExpressionStatement{apsC},
 				})
+
+			}
+
+			if !proc.Args.Empty() {
+				for _, name := range proc.Args.Names() {
+					aps := vsk.ObjMember(
+						vsk.StringIdExpr("iota"),
+						vsk.StringIdExpr("ProcInput"))
+					apsC := &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{
+							&cctpb.FunctionCallExpression{Name: aps},
+						},
+					}
+					vsk.AddFuncArg(apsC.GetFunctionCallExpression(), vsk.StringLiteralExpr(proc.Name))
+
+					pst := vsk.IdExpr(vsk.NsId("donk", "proc_input_t"))
+					fce := &cctpb.FunctionCallExpression{Name:pst}
+					vsk.AddFuncArg(fce, vsk.StringLiteralExpr(name))
+					pstFC := &cctpb.Expression{
+						Value: &cctpb.Expression_FunctionCallExpression{fce},
+					}
+					vsk.AddFuncArg(apsC.GetFunctionCallExpression(), pstFC)
+					stmts = append(stmts, &cctpb.Statement{
+						Value: &cctpb.Statement_ExpressionStatement{apsC},
+					})
+				}
 
 			}
 

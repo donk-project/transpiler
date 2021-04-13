@@ -11,8 +11,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"snowfrost.garden/donk/transpiler/parser"
+	"snowfrost.garden/donk/transpiler/paths"
 )
 
 type RegistrarContext struct {
@@ -22,44 +22,30 @@ type RegistrarContext struct {
 	Parser               *parser.Parser
 	RootInclude          string
 	TypeIncludes         []string
+	AffectedPaths        []paths.Path
 }
 
 // TODO: Migrate TypeRegistrar templates over to ordinary codegen
 func WriteTypeRegistrar(ctxt RegistrarContext) {
-	rfpath, err := bazel.Runfile("templates")
-	if err != nil {
-		panic(err)
-	}
-	pattern := filepath.Join(rfpath, "type_registrar*.tmpl")
+	WriteTypeRegistrarHeaders(ctxt)
+	WriteTypeRegistrarSources(ctxt)
+}
+
+func WriteTypeRegistrarSources(ctxt RegistrarContext) {
 	funcMap := template.FuncMap{
 		"StringsJoin":    strings.Join,
 		"StringsToLower": strings.ToLower,
 	}
 
-	tmpl, err := template.New("").Funcs(funcMap).ParseGlob(pattern)
-	if err != nil {
-		panic(err)
-	}
 	abs, err := filepath.Abs(ctxt.OutputPath)
 	if err != nil {
 		panic(err)
 	}
 
-	file, err := os.Create(abs + "/type_registrar.h")
-	defer file.Close()
-	if err != nil {
-		panic(err)
-	}
-	err = tmpl.ExecuteTemplate(file, "type_registrar.h.tmpl", ctxt)
-	if err != nil {
-		panic(err)
-	}
-
-	ctxt.TypeIncludes = append(ctxt.TypeIncludes, strings.TrimLeft(fmt.Sprintf("%v/root.h", ctxt.RootInclude), "/"))
-	for path, _ := range ctxt.Parser.TypesByPath {
+	ctxt.TypeIncludes = append(ctxt.TypeIncludes, "root.h")
+	for _, path := range ctxt.AffectedPaths {
 		if !path.IsRoot() {
-			inc := fmt.Sprintf("%v%v.h",
-				ctxt.RootInclude,
+			inc := fmt.Sprintf("%v.h",
 				strings.ToLower(path.FullyQualifiedString()))
 			ctxt.TypeIncludes = append(ctxt.TypeIncludes, strings.TrimLeft(inc, "/"))
 		}
@@ -72,7 +58,30 @@ func WriteTypeRegistrar(ctxt RegistrarContext) {
 	if err != nil {
 		panic(err)
 	}
-	err = tmpl.ExecuteTemplate(x, "type_registrar.cc.tmpl", ctxt)
+	err = template.Must(template.New("").Funcs(funcMap).Parse(TYPE_REGISTRAR_CC)).Execute(x, ctxt)
+	if err != nil {
+		panic(err)
+	}
+
+}
+
+func WriteTypeRegistrarHeaders(ctxt RegistrarContext) {
+	funcMap := template.FuncMap{
+		"StringsJoin":    strings.Join,
+		"StringsToLower": strings.ToLower,
+	}
+
+	abs, err := filepath.Abs(ctxt.OutputPath)
+	if err != nil {
+		panic(err)
+	}
+
+	file, err := os.Create(abs + "/type_registrar.h")
+	defer file.Close()
+	if err != nil {
+		panic(err)
+	}
+	err = template.Must(template.New("").Funcs(funcMap).Parse(TYPE_REGISTRAR_H)).Execute(file, ctxt)
 	if err != nil {
 		panic(err)
 	}

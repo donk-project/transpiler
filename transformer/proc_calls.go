@@ -8,26 +8,12 @@ import (
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
-type InvokeType int
-
-const (
-	InvokeTypeAsyncProc InvokeType = iota
-	InvokeTypeSyncProc
-	InvokeTypeChildProc
-)
-
-var PROC_NAMES = map[InvokeType]string{
-	InvokeTypeAsyncProc: "Proc",
-	InvokeTypeSyncProc:  "SProc",
-	InvokeTypeChildProc: "ChildProc",
-}
-
 func (t Transformer) procCall(
 	callee *cctpb.Expression,
 	procName string,
 	args []*cctpb.Expression,
-	invokeType InvokeType) *cctpb.Expression {
-	fc := vsk.FuncCall(vsk.Id(PROC_NAMES[invokeType]))
+	name string) *cctpb.Expression {
+	fc := vsk.FuncCall(vsk.Id(name))
 	vsk.AddFuncArg(fc.GetFunctionCallExpression(), callee)
 	vsk.AddFuncArg(fc.GetFunctionCallExpression(), vsk.StringLiteralExpr(procName))
 	vsk.AddFuncInitListArg(fc.GetFunctionCallExpression(), args...)

@@ -31,7 +31,6 @@ go_library(
 go_binary(
     name = "main",
     srcs = ["main.go"],
-    data = ["core.binarypb"] + glob(["templates/*.tmpl"]),
     visibility = ["//visibility:public"],
     deps = [
         ":ast_go_proto",
@@ -46,7 +45,7 @@ go_binary(
 go_binary(
     name = "coregen",
     srcs = ["coregen.go"],
-    data = ["core.binarypb"] + glob(["templates/*.tmpl"]),
+    data = ["core.binarypb"],
     visibility = ["//visibility:public"],
     deps = [
         ":ast_go_proto",

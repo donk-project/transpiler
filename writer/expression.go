@@ -30,6 +30,10 @@ func printExpression(e *cctpb.Expression) string {
 		return printLiteral(e.GetLiteralExpression())
 	case *cctpb.Expression_IdentifierExpression:
 		return printIdentifier(e.GetIdentifierExpression())
+	case *cctpb.Expression_LambdaExpression:
+		return printLambdaExpression(e.GetLambdaExpression())
+	case *cctpb.Expression_CoYield:
+		return printCoYield(e.GetCoYield())
 	case nil:
 		panic("cannot print nil expression")
 	default:
@@ -112,4 +116,34 @@ func printIdentifier(i *cctpb.Identifier) string {
 		return fmt.Sprintf("%v::%v", i.GetNamespace(), i.GetId())
 	}
 	return i.GetId()
+}
+
+func printLambdaExpression(l *cctpb.LambdaExpression) string {
+	var captures []string
+	var args []string
+
+	for _, arg := range l.Arguments {
+		args = append(args, printFuncArg(arg))
+	}
+
+	cptString := strings.Join(captures, ", ")
+	argString := strings.Join(args, ", ")
+	trailingRetType := " "
+	if l.GetTrailingReturnType() != nil {
+		trailingRetType = " -> " + printCppType(l.GetTrailingReturnType()) + " "
+	}
+
+	var stmts []string
+	if l.GetBody() != nil {
+		for _, stmt := range l.GetBody().Statements {
+			stmts = append(stmts, printStatement(stmt))
+		}
+	}
+	stmtString := strings.Join(stmts, "\n")
+
+	return fmt.Sprintf("[%v](%v)%v{\n\t%v\n}", cptString, argString, trailingRetType, stmtString)
+}
+
+func printCoYield(cy *cctpb.CoYield) string {
+	return fmt.Sprintf("co_yield %v", printExpression(cy.GetExpression()))
 }

@@ -5,11 +5,9 @@ package transformer
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"strings"
 
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
 	"snowfrost.garden/donk/transpiler/parser"
@@ -21,7 +19,6 @@ import (
 
 type Transformer struct {
 	coreNamespace string
-	coreParser    *parser.Parser
 	scopeStack    *scope.Stack
 	includePrefix string
 	lastFileId    uint32
@@ -47,26 +44,15 @@ func (t Transformer) curScope() *scope.ScopeCtxt {
 }
 
 func New(p *parser.Parser, cn string, ip string) *Transformer {
+	coreNamespace := strings.ToUpper(cn)
+	coreNamespace = strings.ReplaceAll(cn, ".", "_")
 	t := &Transformer{
 		parser:        p,
-		coreNamespace: cn,
+		coreNamespace: coreNamespace,
 		project:       &cctpb.Project{},
 		includePrefix: ip,
 	}
 
-	binaryPbPath, err := bazel.Runfile("core.binarypb")
-	if err != nil {
-		panic(err)
-	}
-	in, err := ioutil.ReadFile(binaryPbPath)
-	if err != nil {
-		log.Fatalln("Error reading file:", err)
-	}
-	g := &astpb.Graph{}
-	if err := proto.Unmarshal(in, g); err != nil {
-		log.Fatalln("Failed to parse:", err)
-	}
-	t.coreParser = parser.NewParser(g)
 	t.lastFileId = 1
 	t.scopeStack = scope.NewStack()
 
@@ -103,11 +89,24 @@ func (t Transformer) BeginTransform() {
 		if path.IsRoot() {
 			continue
 		}
+		if !(t.HasEmittableVars(typ) || t.HasEmittableProcs(typ)) {
+			continue
+		}
 		t.PushScopePath(&path)
 		t.curScope().CurType = typ
 		t.scan(path, typ)
 		t.PopScope()
 	}
+}
+
+func (t Transformer) AffectedPaths() []paths.Path {
+	var result []paths.Path
+	for path, typ := range t.parser.TypesByPath {
+		if t.HasEmittableVars(typ) || t.HasEmittableProcs(typ) {
+			result = append(result, path)
+		}
+	}
+	return result
 }
 
 func (t Transformer) makeVarRepresentation(v *parser.DMVar) *scope.VarInScope {
@@ -174,10 +173,14 @@ func (t Transformer) scan(p paths.Path, typ *parser.DMType) {
 				vsk.AddFuncArg(fc.GetFunctionCallExpression(), vsk.StringLiteralExpr(procStrName))
 				funcDefn.BlockDefinition = &cctpb.BlockDefinition{}
 				coYield := &cctpb.CoYield{
-					Expr: vsk.ObjMember(vsk.StringIdExpr("ctxt"), fc),
+					Expression: vsk.ObjMember(vsk.StringIdExpr("ctxt"), fc),
 				}
 				funcDefn.BlockDefinition.Statements = append(funcDefn.BlockDefinition.Statements, &cctpb.Statement{
-					Value: &cctpb.Statement_CoYield{coYield},
+					Value: &cctpb.Statement_ExpressionStatement{
+						&cctpb.Expression{
+							Value: &cctpb.Expression_CoYield{coYield},
+						},
+					},
 				})
 			}
 			nsDefn.FunctionDefinitions = append(nsDefn.FunctionDefinitions, funcDefn)
@@ -273,20 +276,19 @@ func (t Transformer) makeFuncDefn(p *parser.DMProc) *cctpb.FunctionDefinition {
 	proc := p.Proto.Value[len(p.Proto.Value)-1]
 	funcDefn := &cctpb.FunctionDefinition{}
 	if proc.GetCode().GetInvalid() {
-		log.Printf("===================\nInvalid code block found: \n%v\n\n", proto.MarshalTextString(proc.GetCode()))
+		panic(fmt.Sprintf(
+			"invalid code block found: \n%v\n\n", proto.MarshalTextString(proc.GetCode())))
 	}
-	log.Printf("========================= Proc Definition =========================\n")
-	for _, prm := range proc.GetParameter() {
-		log.Printf("\n%v\n", proto.MarshalTextString(prm))
-	}
+	// log.Printf("========================= Proc Definition =========================\n")
+	// for _, prm := range proc.GetParameter() {
+	// 	log.Printf("\n%v\n", proto.MarshalTextString(prm))
+	// }
 	funcDefn.BlockDefinition = t.walkBlock(proc.GetCode().GetPresent())
 
-	if !t.curScope().ReturnFound {
-		funcDefn.BlockDefinition.Statements = append(funcDefn.BlockDefinition.Statements,
-			&cctpb.Statement{
-				Value: &cctpb.Statement_CoReturn{},
-			})
-	}
+	funcDefn.BlockDefinition.Statements = append(funcDefn.BlockDefinition.Statements,
+		&cctpb.Statement{
+			Value: &cctpb.Statement_CoReturn{},
+		})
 
 	t.PopScope()
 	return funcDefn
@@ -300,7 +302,6 @@ func (t Transformer) makeFuncDecl(p *parser.DMProc) *cctpb.FunctionDeclaration {
 			Name:  proto.String("donk::running_proc"),
 		},
 	}
-	t.curScope().AddDeclHeader("\"cppcoro/generator.hpp\"")
 	t.curScope().AddDeclHeader("\"donk/core/procs.h\"")
 
 	fd.Arguments = append(fd.Arguments,
@@ -344,9 +345,6 @@ func (t Transformer) declaredInPathOrParents(name string) bool {
 	p := t.curScope().CurPath.ParentPath()
 	for !p.IsRoot() {
 		if _, ok := t.parser.VarsByPath[*p.Child(name)]; ok {
-			return true
-		}
-		if _, ok := t.coreParser.VarsByPath[*p.Child(name)]; ok {
 			return true
 		}
 		p = p.ParentPath()

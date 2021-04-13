@@ -14,6 +14,7 @@ go_library(
         "member.go",
         "registrar.go",
         "statement.go",
+        "templates.go",
         "writer.go",
     ],
     importpath = "snowfrost.garden/donk/transpiler/writer",
@@ -23,7 +24,6 @@ go_library(
         "@donk_transpiler//:global",
         "@donk_transpiler//:paths",
         "@donk_transpiler//parser",
-        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
         "@vasker//:cc_grammar_go_proto",
     ],
 )

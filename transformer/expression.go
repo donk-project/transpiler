@@ -5,7 +5,7 @@ package transformer
 
 import (
 	"fmt"
-	"log"
+	// "log"
 
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
@@ -23,7 +23,7 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 	if e == nil {
 		panic("tried to walk empty expression")
 	}
-	log.Printf("=========================== ASTPB EXPRESSION ========================\n%v\n", proto.MarshalTextString(e))
+	// log.Printf("=========================== ASTPB EXPRESSION ========================\n%v\n", proto.MarshalTextString(e))
 
 	switch {
 	case e.GetBase() != nil:
@@ -131,22 +131,8 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 			switch expr.Value.(type) {
 			case *cctpb.Expression_ComparisonExpression:
 				{
-					// TODO: Don't just look for an int literal, look for int-returning exprs
 					lhs := t.walkExpression(e.GetBinaryOp().GetLhs())
 					rhs := t.walkExpression(e.GetBinaryOp().GetRhs())
-					hasInt := isRawInt(e.GetBinaryOp().GetLhs()) || isRawInt(e.GetBinaryOp().GetRhs())
-					hasDmObj := t.isDMObject(lhs) || t.isDMObject(rhs)
-					if hasInt && hasDmObj {
-						isLhsInt := isRawInt(e.GetBinaryOp().GetLhs())
-						if isLhsInt {
-							expr.GetComparisonExpression().Lhs = lhs
-							expr.GetComparisonExpression().Rhs = vsk.PtrMember(rhs, vsk.FuncCall(vsk.Id("get_int")))
-							return expr
-						}
-						expr.GetComparisonExpression().Lhs = vsk.PtrMember(lhs, vsk.FuncCall(vsk.Id("get_int")))
-						expr.GetComparisonExpression().Rhs = rhs
-						return expr
-					}
 
 					expr.GetComparisonExpression().Lhs = lhs
 					expr.GetComparisonExpression().Rhs = rhs
@@ -165,8 +151,14 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 
 					// TODO: Also world.log, or any list containing mobs, or any mob, or view/oview
 					if (isWorld || isWorldLog) && isBitwiseLShift {
-						pc := t.procCall(wrld, BroadcastRedirectProcName, []*cctpb.Expression{rhs}, InvokeTypeAsyncProc)
-						return pc
+						pc := t.procCall(wrld, BroadcastRedirectProcName, []*cctpb.Expression{rhs}, "ChildProc")
+						return &cctpb.Expression{
+							Value: &cctpb.Expression_CoYield{
+								&cctpb.CoYield{
+									Expression: pc,
+								},
+							},
+						}
 					}
 
 					expr.GetArithmeticExpression().Lhs = lhs
@@ -199,27 +191,6 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 			operator := ConvertAssignOp(e.GetAssignOp().GetOp())
 			lhs := t.walkExpression(e.GetAssignOp().GetLhs())
 			rhs := t.walkExpression(e.GetAssignOp().GetRhs())
-			if t.isVarAssignFromPtr(lhs) {
-				assignExpr := &cctpb.AssignmentExpression{
-					Operator: &operator,
-					Rhs:      rhs,
-				}
-				assignExpr.Lhs = vsk.PtrIndirect(lhs)
-				return &cctpb.Expression{
-					Value: &cctpb.Expression_AssignmentExpression{assignExpr},
-				}
-			}
-			if isRawIdentifier(lhs) && t.curScope().VarType(rawIdentifier(lhs)) == scope.VarTypeInt {
-				fce := &cctpb.Expression{
-					Value: &cctpb.Expression_FunctionCallExpression{
-						&cctpb.FunctionCallExpression{
-							Name: vsk.StringIdExpr("get_int"),
-						},
-					},
-				}
-
-				rhs = vsk.PtrMember(rhs, fce)
-			}
 
 			assignExpr := &cctpb.AssignmentExpression{
 				Operator: &operator,

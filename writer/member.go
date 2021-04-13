@@ -36,7 +36,7 @@ func (w Writer) printMemberSpecifier(ms *cctpb.MemberSpecification) string {
 		{
 			fd := ms.GetFunctionDeclaration()
 			result := fmt.Sprintf("%v %v(%v)",
-				w.printCppType(fd.GetReturnType()),
+				printCppType(fd.GetReturnType()),
 				fd.GetName(),
 				w.joinArgs(fd.GetArguments()))
 			if ms.GetFunctionDeclaration().GetVirtSpecifier() != nil {

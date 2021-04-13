@@ -80,6 +80,18 @@ func (pa ProcArgs) Add(name string, inputSchema ArgInputSchema, inListExpr *astp
 	pa.args[name] = newPa
 }
 
+func (pa ProcArgs) Empty() bool {
+	return len(pa.args) == 0
+}
+
+func (pa ProcArgs) Names() []string {
+	var result []string
+	for name, _ := range pa.args {
+		result = append(result, name)
+	}
+	return result
+}
+
 func MakeDefaultProcFlags() ProcFlags {
 	flags := ProcFlags{
 		PopupMenu: true,

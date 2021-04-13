@@ -10,7 +10,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"snowfrost.garden/donk/transpiler/paths"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
@@ -30,24 +29,6 @@ func New(project *cctpb.Project, outputPath string) *Writer {
 	var writer Writer
 	writer.outputPath = outputPath
 	writer.project = project
-	rfpath, err := bazel.Runfile("templates")
-	if err != nil {
-		panic(err)
-	}
-	pattern := filepath.Join(rfpath, "transformer_*.tmpl")
-	writer.tmpl, err = template.New("").Funcs(template.FuncMap{
-		"printCppType":             writer.printCppType,
-		"joinArgs":                 writer.joinArgs,
-		"printStatement":           printStatement,
-		"printBaseSpecifiers":      printBaseSpecifiers,
-		"printMemberSpecifier":     writer.printMemberSpecifier,
-		"printFunctionDeclaration": writer.printFunctionDeclaration,
-		"printConstructor":         writer.printConstructor,
-	}).ParseGlob(pattern)
-	if err != nil {
-		panic(err)
-	}
-
 	return &writer
 }
 
@@ -66,9 +47,24 @@ func makeSortHeaders(headers []string) func(a, b int) bool {
 }
 
 func (w *Writer) WriteOutput() {
+	w.WriteHeaders()
+	w.WriteSources()
+}
+
+func (w *Writer) WriteHeaders() {
 	abs, err := filepath.Abs(w.outputPath)
 	if err != nil {
 		panic(err)
+	}
+
+	funcMap := template.FuncMap{
+		"printCppType":             printCppType,
+		"joinArgs":                 w.joinArgs,
+		"printStatement":           printStatement,
+		"printBaseSpecifiers":      printBaseSpecifiers,
+		"printMemberSpecifier":     w.printMemberSpecifier,
+		"printFunctionDeclaration": w.printFunctionDeclaration,
+		"printConstructor":         w.printConstructor,
 	}
 
 	for _, declFile := range w.project.GetDeclarationFiles() {
@@ -83,10 +79,28 @@ func (w *Writer) WriteOutput() {
 		if err != nil {
 			panic(err)
 		}
-		err = w.tmpl.ExecuteTemplate(x, "transformer_declaration.h.tmpl", declFile)
+		err = template.Must(template.New("").Funcs(funcMap).Parse(TRANSFORMER_DECLARATION_H)).Execute(x, declFile)
 		if err != nil {
 			panic(err)
 		}
+	}
+
+}
+
+func (w *Writer) WriteSources() {
+	abs, err := filepath.Abs(w.outputPath)
+	if err != nil {
+		panic(err)
+	}
+
+	funcMap := template.FuncMap{
+		"printCppType":             printCppType,
+		"joinArgs":                 w.joinArgs,
+		"printStatement":           printStatement,
+		"printBaseSpecifiers":      printBaseSpecifiers,
+		"printMemberSpecifier":     w.printMemberSpecifier,
+		"printFunctionDeclaration": w.printFunctionDeclaration,
+		"printConstructor":         w.printConstructor,
 	}
 
 	for _, defnFile := range w.project.GetDefinitionFiles() {
@@ -100,7 +114,7 @@ func (w *Writer) WriteOutput() {
 		if err != nil {
 			panic(err)
 		}
-		err = w.tmpl.ExecuteTemplate(y, "transformer_definition.cc.tmpl", defnFile)
+		err = template.Must(template.New("").Funcs(funcMap).Parse(TRANSFORMER_DEFINITION_CC)).Execute(y, defnFile)
 		if err != nil {
 			panic(err)
 		}

@@ -29,8 +29,6 @@ func printStatement(s *cctpb.Statement) string {
 		return printIfStatement(s.GetIfStatement())
 	case *cctpb.Statement_CompoundStatement:
 		return printCompoundStatement(s.GetCompoundStatement())
-	case *cctpb.Statement_CoYield:
-		return printCoYield(s.GetCoYield())
 	case *cctpb.Statement_CoReturn:
 		return printCoReturn(s.GetCoReturn())
 	case nil:
@@ -40,13 +38,9 @@ func printStatement(s *cctpb.Statement) string {
 	}
 }
 
-func printCoYield(cy *cctpb.CoYield) string {
-	return fmt.Sprintf("co_yield %v;", printExpression(cy.GetExpr()))
-}
-
 func printCoReturn(cr *cctpb.CoReturn) string {
-	if cr.GetExpr() != nil {
-		return fmt.Sprintf("co_return %v;", printExpression(cr.GetExpr()))
+	if cr.GetExpression() != nil {
+		return fmt.Sprintf("co_return %v;", printExpression(cr.GetExpression()))
 	}
 	return "co_return;"
 }
