@@ -5,6 +5,8 @@ package transformer
 
 import (
 	"fmt"
+	"strings"
+
 	// "log"
 
 	"github.com/golang/protobuf/proto"
@@ -55,6 +57,18 @@ func (t *Transformer) generateRegistrationFunction(namespace string) *cctpb.Func
 	fnDefn := &cctpb.FunctionDefinition{}
 	blockDefn := &cctpb.BlockDefinition{}
 	var stmts []*cctpb.Statement
+
+	parentType := t.curScope().CurType.ParentType()
+	if !parentType.IsRoot() && !parentType.IsCoretype() {
+		t.curScope().AddDefnHeader(
+			"\"" + strings.TrimPrefix(parentType.FullyQualifiedString(), "/") + ".h\"")
+		ns := t.coreNamespace + "::" + parentType.AsNamespace()
+		parentRegister := vsk.FuncCall(vsk.NsId(ns, "Register"))
+		vsk.AddFuncArg(parentRegister.GetFunctionCallExpression(), vsk.StringIdExpr("iota"))
+		stmts = append(stmts, &cctpb.Statement{
+			Value: &cctpb.Statement_ExpressionStatement{parentRegister},
+		})
+	}
 
 	procs := t.curScope().CurType.Procs
 	vars := t.curScope().CurType.Vars
@@ -202,7 +216,7 @@ func (t *Transformer) generateRegistrationFunction(namespace string) *cctpb.Func
 					vsk.AddFuncArg(apsC.GetFunctionCallExpression(), vsk.StringLiteralExpr(proc.Name))
 
 					pst := vsk.IdExpr(vsk.NsId("donk", "proc_input_t"))
-					fce := &cctpb.FunctionCallExpression{Name:pst}
+					fce := &cctpb.FunctionCallExpression{Name: pst}
 					vsk.AddFuncArg(fce, vsk.StringLiteralExpr(name))
 					pstFC := &cctpb.Expression{
 						Value: &cctpb.Expression_FunctionCallExpression{fce},

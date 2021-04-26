@@ -23,15 +23,26 @@ type RegistrarContext struct {
 	RootInclude          string
 	TypeIncludes         []string
 	AffectedPaths        []paths.Path
+	Registrations        map[string]string
+}
+
+func NewRegistrarContext() *RegistrarContext {
+	r := &RegistrarContext{}
+	r.Registrations = make(map[string]string)
+	return r
+}
+
+func (r *RegistrarContext) AddRegistration(fullPath string, registerNs string) {
+	r.Registrations[fullPath] = registerNs
 }
 
 // TODO: Migrate TypeRegistrar templates over to ordinary codegen
-func WriteTypeRegistrar(ctxt RegistrarContext) {
+func WriteTypeRegistrar(ctxt *RegistrarContext) {
 	WriteTypeRegistrarHeaders(ctxt)
 	WriteTypeRegistrarSources(ctxt)
 }
 
-func WriteTypeRegistrarSources(ctxt RegistrarContext) {
+func WriteTypeRegistrarSources(ctxt *RegistrarContext) {
 	funcMap := template.FuncMap{
 		"StringsJoin":    strings.Join,
 		"StringsToLower": strings.ToLower,
@@ -65,7 +76,7 @@ func WriteTypeRegistrarSources(ctxt RegistrarContext) {
 
 }
 
-func WriteTypeRegistrarHeaders(ctxt RegistrarContext) {
+func WriteTypeRegistrarHeaders(ctxt *RegistrarContext) {
 	funcMap := template.FuncMap{
 		"StringsJoin":    strings.Join,
 		"StringsToLower": strings.ToLower,

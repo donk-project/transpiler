@@ -17,6 +17,9 @@ import (
 	"snowfrost.garden/donk/transpiler/writer"
 )
 
+// coregen generates the skeleton of the Donk API: all of the files in donk/api.
+// This means running it will clobber any custom implementations filled in there.
+// It is only used to expose the API used by the interpreter.
 func main() {
 	outputPath := flag.String("output_path", "", "Directory for generated output")
 	includePrefix := flag.String("include_prefix", "", "Prefix to append to include statements")

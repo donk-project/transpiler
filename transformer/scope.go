@@ -48,6 +48,7 @@ type VarInScope struct {
 	defaultValue string
 	curValue     string
 	Type         VarType
+	TypePath     paths.Path
 	Scope        VarScope
 }
 
@@ -89,7 +90,7 @@ type ScopeCtxt struct {
 	CurDeclFile    *cctpb.DeclarationFile
 	CurDefnFile    *cctpb.DefinitionFile
 	curClassDecl   *cctpb.ClassDeclaration
-	CurPath        *paths.Path
+	CurPath        paths.Path
 	CurType        *parser.DMType
 	CurProc        *parser.DMProc
 	DeclaredVars   *DeclaredVars
@@ -132,6 +133,9 @@ func (s *ScopeCtxt) HasField(name string) bool {
 		if n == name && v.Scope == VarScopeField {
 			return true
 		}
+	}
+	if s.parentScope != nil {
+		return s.parentScope.HasField(name)
 	}
 	return false
 }
@@ -196,7 +200,7 @@ func MakeRoot() *ScopeCtxt {
 	return root
 }
 
-func (s *ScopeCtxt) MakeChildPath(p *paths.Path) *ScopeCtxt {
+func (s *ScopeCtxt) MakeChildPath(p paths.Path) *ScopeCtxt {
 	child := &ScopeCtxt{
 		CurDeclFile:    s.CurDeclFile,
 		CurDefnFile:    s.CurDefnFile,

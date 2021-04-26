@@ -63,7 +63,7 @@ func (t Transformer) PushScope() {
 	t.scopeStack.Push(t.curScope().MakeChild())
 }
 
-func (t Transformer) PushScopePath(p *paths.Path) {
+func (t Transformer) PushScopePath(p paths.Path) {
 	t.scopeStack.Push(t.curScope().MakeChildPath(p))
 }
 
@@ -82,8 +82,10 @@ func (t Transformer) BeginTransform() {
 	t.walkPerformed = true
 	t.scopeStack.Push(scope.MakeRoot())
 
-	root := t.parser.TypesByPath[*paths.New("/")]
-	t.scan(*paths.New("/"), root)
+	root, ok := t.parser.TypesByPath[paths.New("/")]
+	if ok {
+		t.scan(paths.New("/"), root)
+	}
 
 	for path, typ := range t.parser.TypesByPath {
 		if path.IsRoot() {
@@ -92,21 +94,11 @@ func (t Transformer) BeginTransform() {
 		if !(t.HasEmittableVars(typ) || t.HasEmittableProcs(typ)) {
 			continue
 		}
-		t.PushScopePath(&path)
+		t.PushScopePath(path)
 		t.curScope().CurType = typ
 		t.scan(path, typ)
 		t.PopScope()
 	}
-}
-
-func (t Transformer) AffectedPaths() []paths.Path {
-	var result []paths.Path
-	for path, typ := range t.parser.TypesByPath {
-		if t.HasEmittableVars(typ) || t.HasEmittableProcs(typ) {
-			result = append(result, path)
-		}
-	}
-	return result
 }
 
 func (t Transformer) makeVarRepresentation(v *parser.DMVar) *scope.VarInScope {
@@ -142,7 +134,7 @@ func (t Transformer) scan(p paths.Path, typ *parser.DMType) {
 		nsStr = nsStr + "::api"
 	}
 	if !p.IsRoot() {
-		nsStr = nsStr + "::" + p.AsNamespace()
+		nsStr = nsStr + "::" + typ.ResolvedPath().AsNamespace()
 	}
 
 	ns := proto.String(nsStr)
@@ -344,7 +336,7 @@ func (t Transformer) declaredInPathOrParents(name string) bool {
 
 	p := t.curScope().CurPath.ParentPath()
 	for !p.IsRoot() {
-		if _, ok := t.parser.VarsByPath[*p.Child(name)]; ok {
+		if _, ok := t.parser.VarsByPath[p.Child(name)]; ok {
 			return true
 		}
 		p = p.ParentPath()
@@ -355,4 +347,18 @@ func (t Transformer) declaredInPathOrParents(name string) bool {
 
 func (t Transformer) passedAsArg(name string) bool {
 	return t.curScope().CurProc.HasArg(name)
+}
+
+func (t Transformer) supertypeNamespace(p *parser.DMProc) string {
+	if p.Type.Path.IsCoretype() {
+		return "donk::api::" + p.Type.Path.AsNamespace()
+	}
+	return t.coreNamespace + "::" + p.Type.ParentType().AsNamespace()
+}
+
+func (t Transformer) supertypeInclude(p *parser.DMProc) string {
+	if p.Type.Path.IsCoretype() {
+		return "\"donk/api" + p.Type.Path.FullyQualifiedString() + ".h\""
+	}
+	return "\"" + strings.TrimLeft(p.Type.ParentType().FullyQualifiedString(), "/") + ".h\""
 }

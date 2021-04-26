@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"snowfrost.garden/donk/transpiler/parser"
+	"snowfrost.garden/donk/transpiler/paths"
 	"snowfrost.garden/donk/transpiler/scope"
 
 	astpb "snowfrost.garden/donk/proto/ast"
@@ -16,22 +17,12 @@ import (
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
-var knownSynchronousProcs = map[string]bool{
-	"/rand": true,
-	// TODO: Keeping track of object types is going to have to be much more sophisticated.
-	// It's easy to tell that a proc call is a global, or if the type is a known token
-	// (world, usr). But random objects in scope will have to have their types deduced
-	// before we can determine if the proc being called is known synchronous. i.e.
-	// There is no way at current to put "/mob/procname" here and have it recognized
-	// without more object type deduction.
-}
-
 func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
+	if s == nil {
+		panic("tried to walk empty statement")
+	}
 	stmt := &cctpb.Statement{}
 	// log.Printf("=========================== ASTPB STATEMENT ========================\n%v\n", proto.MarshalTextString(s))
-	if s == nil {
-		return stmt
-	}
 
 	if t.isSleep(s) {
 		return t.astpbSleepToCctpbSleep(s)
@@ -94,6 +85,19 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 								},
 							},
 						}, vr.Type)
+					}
+				} else if s.GetVar().GetValue().GetBase().GetTerm().GetNew().GetType() != nil &&
+					s.GetVar().GetValue().GetBase().GetTerm().GetNew().GetType().GetImplicit() {
+					if s.GetVar().GetVarType().GetTypePath() != nil {
+						vr.TypePath = paths.NewFromTreePath(s.GetVar().GetVarType().GetTypePath())
+						t.curScope().AddScopedVar(vr)
+						return t.declareVarWithVal(
+							s.GetVar().GetName(),
+							ctxtMakeCall(vr.TypePath),
+							vr.Type,
+						)
+					} else {
+						panic("unsupported implicit var with no vartype")
 					}
 				}
 				t.curScope().AddScopedVar(vr)
@@ -310,7 +314,8 @@ func (t Transformer) walkStatement(s *astpb.Statement) *cctpb.Statement {
 			// This ugly garbage below is needed to turn DM ifs, which are represented
 			// in AST as a repeated list of arms followed by one condition-less else,
 			// into C++ grammar, in which ifs are pairs of statements, with the latter
-			// capable of being an additional if statement.
+			// capable of being an additional if statement (as described in
+			// https://cppreference.com/w/cpp/language/if).
 			//
 			// We add each else arm in reverse order to a slice and then respectively
 			// assign each one to the false-arm of the one after it.

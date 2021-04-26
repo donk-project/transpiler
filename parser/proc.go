@@ -219,6 +219,6 @@ func (d *DMProc) Block(idx int) *astpb.Block {
 	return d.Proto.Value[idx].Code.Present
 }
 
-func (d *DMProc) ProcPath() *paths.Path {
+func (d *DMProc) ProcPath() paths.Path {
 	return d.Type.Path.Child(d.Name)
 }

@@ -16,7 +16,7 @@ type DMVar struct {
 	Type  *DMType
 	Name  string
 	Proto *astpb.TypeVar
-	Path  *paths.Path
+	Path  paths.Path
 }
 
 type DMVars []*DMVar
@@ -46,7 +46,7 @@ func NewVar(s *Parser, t *DMType, n string, p *astpb.TypeVar) *DMVar {
 	return v
 }
 
-func CachedVar(s *Parser, p *paths.Path) *DMVar {
+func CachedVar(s *Parser, p paths.Path) *DMVar {
 	v := &DMVar{State: s, Name: p.Basename, Path: p}
 	return v
 }
@@ -64,11 +64,11 @@ func (v *DMVar) HasStaticValue() bool {
 	return false
 }
 
-func (d *DMVar) DeclarationTypePath() *paths.Path {
+func (d *DMVar) DeclarationTypePath() paths.Path {
 	if d.Proto.GetDeclaration().GetVarType().GetTypePath() != nil {
 		return paths.NewFromTreePath(d.Proto.Declaration.VarType.TypePath)
 	}
-	return nil
+	panic("no declaration type path found")
 }
 
 func (p *DMVar) PrettyProto() string {

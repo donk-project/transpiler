@@ -27,5 +27,5 @@ func (t *Transformer) walkPrefab(p *astpb.Prefab) *cctpb.Expression {
 		parts = append(parts, *tp.S)
 	}
 	fqp := paths.New(strings.Join(parts, "/"))
-	return pathExpression(*fqp)
+	return pathExpression(fqp)
 }

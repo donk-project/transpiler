@@ -1,7 +1,7 @@
 # Donk Project
 # Copyright (c) 2021 Warriorstar Orion <orion@snowfrost.garden>
 # SPDX-License-Identifier: MIT
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 package(default_visibility = ["@donk_transpiler//:pkg"])
 
@@ -45,4 +45,19 @@ go_library(
         "@vasker",
         "@vasker//:cc_grammar_go_proto",
     ],
+)
+
+go_test(
+    name = "transformer_test",
+    srcs = ["transformer_test.go"],
+    embed = [
+        ":transformer"
+    ],
+    deps = [
+        "@donk_transpiler//parser",
+        "@donk_transpiler//:ast_go_proto",
+        "@donk_transpiler//:paths",
+        "@com_github_golang_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//encoding/prototext:go_default_library",
+    ]
 )

@@ -112,7 +112,7 @@ func printLiteral(e *cctpb.Literal) string {
 }
 
 func printIdentifier(i *cctpb.Identifier) string {
-	if i.Namespace != nil {
+	if i.Namespace != nil && i.GetNamespace() != "" {
 		return fmt.Sprintf("%v::%v", i.GetNamespace(), i.GetId())
 	}
 	return i.GetId()

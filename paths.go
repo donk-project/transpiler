@@ -5,7 +5,6 @@ package paths
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	astpb "snowfrost.garden/donk/proto/ast"
@@ -26,7 +25,7 @@ func (p Path) String() string {
 	return fmt.Sprintf("`%v`", p.FullyQualifiedString())
 }
 
-func NewFromTreePath(tp *astpb.TreePath) *Path {
+func NewFromTreePath(tp *astpb.TreePath) Path {
 	var s []string
 	for _, x := range tp.S {
 		s = append(s, x)
@@ -34,7 +33,7 @@ func NewFromTreePath(tp *astpb.TreePath) *Path {
 	return New("/" + strings.Join(s, "/"))
 }
 
-func NewFromTypePaths(tps []*astpb.TypePath) *Path {
+func NewFromTypePaths(tps []*astpb.TypePath) Path {
 	var s []string
 	for _, tp := range tps {
 		s = append(s, tp.GetS())
@@ -42,7 +41,7 @@ func NewFromTypePaths(tps []*astpb.TypePath) *Path {
 	return New("/" + strings.Join(s, "/"))
 }
 
-func New(s string) *Path {
+func New(s string) Path {
 	if s == "" {
 		panic("Empty path")
 	}
@@ -63,10 +62,10 @@ func New(s string) *Path {
 	parts := strings.Split(p.Name, "/")
 	p.Basename = parts[len(parts)-1]
 
-	return &p
+	return p
 }
 
-func JoinIntoPath(c []string) *Path {
+func JoinIntoPath(c []string) Path {
 	name := strings.Join(c, "/")
 	if !strings.HasPrefix(name, "/") {
 		name = "/" + name
@@ -86,7 +85,7 @@ func (p Path) FullyQualifiedString() string {
 	return p.Name
 }
 
-func (p *Path) ParentPath() *Path {
+func (p Path) ParentPath() Path {
 	if p.Name == "/area" {
 		return New("/atom")
 	}
@@ -107,11 +106,11 @@ func (p *Path) ParentPath() *Path {
 	return JoinIntoPath(split[:len(split)-1])
 }
 
-func (p *Path) Child(child string) *Path {
+func (p Path) Child(child string) Path {
 	return JoinIntoPath([]string{strings.TrimRight(p.Name, "/"), strings.TrimLeft(child, "/")})
 }
 
-func (p *Path) Parts() []string {
+func (p Path) Parts() []string {
 	result := strings.Split(strings.TrimPrefix(p.FullyQualifiedString(), "/"), "/")
 	return result
 }
@@ -130,10 +129,6 @@ func (p Path) AsNamespace() string {
 	}
 
 	return strings.Join(result, "::")
-}
-
-func (p *Path) CreateAsDir(abs string) {
-	os.MkdirAll(abs+"/"+p.FullyQualifiedString(), 0755)
 }
 
 func (p Path) IsCoretype() bool {

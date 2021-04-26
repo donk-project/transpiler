@@ -6,7 +6,6 @@ package parser
 import (
 	"fmt"
 	// "log"
-	"strings"
 
 	"github.com/golang/protobuf/proto"
 	astpb "snowfrost.garden/donk/proto/ast"
@@ -15,18 +14,18 @@ import (
 
 type DMType struct {
 	State          *Parser
-	Path           *paths.Path
+	Path           paths.Path
 	Proto          *astpb.Type
-	Dependencies   []*paths.Path
-	AdditionalDeps []*paths.Path
+	Dependencies   []paths.Path
+	AdditionalDeps []paths.Path
 	Procs          []*DMProc
 	Vars           DMVars
-	ForwardDecls   map[string]*paths.Path
+	ForwardDecls   map[string]paths.Path
 }
 
-func NewType(s *Parser, p *paths.Path, pb *astpb.Type) *DMType {
+func NewType(s *Parser, p paths.Path, pb *astpb.Type) *DMType {
 	t := &DMType{State: s, Path: p, Proto: pb}
-	t.ForwardDecls = make(map[string]*paths.Path)
+	t.ForwardDecls = make(map[string]paths.Path)
 	return t
 }
 
@@ -56,17 +55,17 @@ func (p *DMType) PrettyProto() string {
 	return proto.MarshalTextString(p.Proto)
 }
 
-func (d *DMType) AllForwardDecls() map[string][]*paths.Path {
-	x := make(map[string][]*paths.Path)
-
-	for _, dep := range d.AdditionalDeps {
-		if dep == d.Path {
-			continue
-		}
-		if !strings.HasPrefix(dep.Name, "/list") {
-			x[strings.TrimPrefix(dep.AsNamespace(), "::")] = append(x[dep.ParentPath().Name], dep)
+func (t *DMType) ParentType() paths.Path {
+	for _, v := range t.Vars {
+		if v.Name == "parent_type" {
+			if v.Proto.GetValue().GetConstant().GetPrefab().GetPop().GetTreePath() != nil {
+				return paths.NewFromTreePath(v.Proto.GetValue().GetConstant().GetPrefab().GetPop().GetTreePath())
+			}
 		}
 	}
+	return t.Path.ParentPath()
+}
 
-	return x
+func (t *DMType) ResolvedPath() paths.Path {
+	return t.ParentType().Child(t.Path.Basename)
 }

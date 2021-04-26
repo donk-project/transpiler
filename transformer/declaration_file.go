@@ -14,7 +14,7 @@ import (
 
 func (t Transformer) buildDeclFile() {
 	declFilename := strings.ToLower(
-		strings.TrimPrefix(t.curScope().CurPath.FullyQualifiedString(), "/")) + ".h"
+		strings.TrimPrefix(t.curScope().CurType.ResolvedPath().FullyQualifiedString(), "/")) + ".h"
 	if t.curScope().CurPath.IsRoot() {
 		declFilename = "root.h"
 	}
@@ -32,7 +32,7 @@ func (t Transformer) buildDeclFile() {
 	t.curScope().CurDeclHeaders = scope.NewHeaderCollection()
 	t.curScope().CurDeclFile.FileMetadata = &cctpb.FileMetadata{
 		FileId:     proto.Uint32(t.lastFileId),
-		SourcePath: proto.String(t.curScope().CurPath.FullyQualifiedString()),
+		SourcePath: proto.String(t.curScope().CurType.ResolvedPath().FullyQualifiedString()),
 		Filename:   proto.String(declFilename),
 	}
 	if t.curScope().CurPath.IsRoot() {

@@ -33,7 +33,7 @@ func (t Transformer) walkConstant(c *astpb.Constant) *cctpb.Expression {
 		{
 			t.curScope().AddDefnHeader("\"donk/core/vars.h\"")
 			pf := paths.NewFromTreePath(c.GetPrefab().GetPop().GetTreePath())
-			return prefabExpression(*pf)
+			return prefabExpression(pf)
 		}
 	}
 

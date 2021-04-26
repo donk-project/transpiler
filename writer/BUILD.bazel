@@ -21,7 +21,6 @@ go_library(
     deps = [
         "@com_github_golang_protobuf//proto:go_default_library",
         "@donk_transpiler//:ast_go_proto",
-        "@donk_transpiler//:global",
         "@donk_transpiler//:paths",
         "@donk_transpiler//parser",
         "@vasker//:cc_grammar_go_proto",

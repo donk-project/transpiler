@@ -47,7 +47,17 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 					for _, follow := range e.GetBase().GetFollow() {
 						call := follow.GetCall()
 						if call != nil {
-							// TODO: Flesh out call transformation
+							pc := genericCtxtCall("ChildProc")
+							vsk.AddFuncArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), term)
+							vsk.AddFuncArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), vsk.StringLiteralExpr(call.GetS()))
+							// TODO: args
+							vsk.AddFuncInitListArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), []*cctpb.Expression{}...)
+							return &cctpb.Expression{Value: &cctpb.Expression_CoYield{
+								&cctpb.CoYield{
+									Expression: pc,
+								},
+							}}
+
 						} else if follow.GetField() != nil {
 							field := follow.GetField()
 							if field.GetIndexKind() == astpb.IndexKind_INDEX_KIND_DOT {
@@ -191,6 +201,13 @@ func (t Transformer) walkExpression(e *astpb.Expression) *cctpb.Expression {
 			operator := ConvertAssignOp(e.GetAssignOp().GetOp())
 			lhs := t.walkExpression(e.GetAssignOp().GetLhs())
 			rhs := t.walkExpression(e.GetAssignOp().GetRhs())
+
+			if isRawIdentifierAstpb(e.GetAssignOp().GetLhs()) {
+				rId := rawIdentifierAstpb(e.GetAssignOp().GetLhs())
+				if t.curScope().HasField(rId) {
+					lhs = vsk.PtrIndirect(lhs)
+				}
+			}
 
 			assignExpr := &cctpb.AssignmentExpression{
 				Operator: &operator,

@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"strings"
 
+	// "log"
+
 	"github.com/golang/protobuf/proto"
 	cctpb "snowfrost.garden/vasker/cc_grammar"
 )
 
 func printStatement(s *cctpb.Statement) string {
+	// log.Printf("=========================== CCTPB STATEMENT ========================\n%v\n", proto.MarshalTextString(s))
 	switch s.Value.(type) {
 	case *cctpb.Statement_ExpressionStatement:
 		return printExpression(s.GetExpressionStatement()) + ";"

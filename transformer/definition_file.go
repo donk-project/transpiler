@@ -18,7 +18,7 @@ func (t Transformer) buildDefnFile() {
 	}
 	t.curScope().CurDefnHeaders = scope.NewHeaderCollection()
 	bName := strings.ToLower(
-		strings.TrimPrefix(t.curScope().CurPath.FullyQualifiedString(), "/"))
+		strings.TrimPrefix(t.curScope().CurType.ResolvedPath().FullyQualifiedString(), "/"))
 	incPrefix := ""
 	if t.curScope().CurPath.IsRoot() {
 		t.curScope().CurDefnFile.BaseInclude = proto.String("\"" + incPrefix + "root.h\"")
@@ -32,5 +32,5 @@ func (t Transformer) buildDefnFile() {
 	t.lastFileId++
 
 	t.curScope().CurDefnFile.FileMetadata.FileId = proto.Uint32(t.lastFileId)
-	t.curScope().CurDefnFile.FileMetadata.SourcePath = proto.String(t.curScope().CurPath.FullyQualifiedString())
+	t.curScope().CurDefnFile.FileMetadata.SourcePath = proto.String(t.curScope().CurType.ResolvedPath().FullyQualifiedString())
 }

@@ -53,13 +53,13 @@ func NewParser(graph *astpb.Graph) *Parser {
 func (p *Parser) ParseTypes(g *astpb.Graph, tbp *map[paths.Path]*DMType) {
 	for _, t := range g.GetType() {
 		if *t.Name == "" {
-			(*tbp)[*paths.New("/")] = NewType(p, paths.New("/"), t)
+			(*tbp)[paths.New("/")] = NewType(p, paths.New("/"), t)
 			continue
 		}
 		iterpath := paths.New(*t.Path)
-		p.Stats.ReferenceCount[*iterpath]++
+		p.Stats.ReferenceCount[iterpath]++
 		dmt := NewType(p, iterpath, t)
-		(*tbp)[*iterpath] = dmt
+		(*tbp)[iterpath] = dmt
 		if !iterpath.ParentPath().IsRoot() {
 			dmt.Dependencies = append(dmt.Dependencies, paths.New(iterpath.ParentPath().Name))
 		}
@@ -73,9 +73,9 @@ func (p *Parser) ParseVars(g *astpb.Graph, tbp *map[paths.Path]*DMType) {
 			protos[k] = pv
 			vv := NewVar(p, dmType, k, pv)
 			vv.Path = path.Child(k)
-			p.VarsByPath[*vv.Path] = vv
+			p.VarsByPath[vv.Path] = vv
 			if !vv.Type.Path.IsRoot() {
-				p.Stats.ReferenceCount[*vv.Type.Path]++
+				p.Stats.ReferenceCount[vv.Type.Path]++
 			}
 			dmType.Vars = append(dmType.Vars, vv)
 		}
@@ -87,7 +87,7 @@ func (p *Parser) ParseProcs(g *astpb.Graph, tbp *map[paths.Path]*DMType) {
 		for k, pb := range dmType.Proto.GetProcs() {
 			if !dmType.IsProcRegistered(k) {
 				proc := NewProc(p, dmType, k, pb)
-				p.ProcsByPath[*proc.ProcPath()] = proc
+				p.ProcsByPath[proc.ProcPath()] = proc
 				dmType.Procs = append(dmType.Procs, proc)
 			}
 		}

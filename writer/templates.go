@@ -107,12 +107,8 @@ void RegisterAll(std::shared_ptr<std::map<donk::path_t, std::vector<std::functio
 namespace {{$.CoreNamespace}} {
 
 void RegisterAll(std::shared_ptr<std::map<donk::path_t, std::vector<std::function<void(donk::iota_t&)>>>> collector) {
-  {{- range $p := $.AffectedPaths }}
-    (*collector)[donk::path_t("{{$p.FullyQualifiedString}}")].push_back({{ if $p.IsRoot -}}
-    {{$.CoreNamespace}}{{$p.AsNamespace}}::Register);
-    {{- else -}}
-    {{$.CoreNamespace}}::{{$p.AsNamespace}}::Register);
-    {{- end }}
+  {{- range $FullPath, $RegisterNs := $.Registrations }}
+    (*collector)[donk::path_t("{{$FullPath}}")].push_back({{$RegisterNs}}::Register);
   {{- end }}
 }
 

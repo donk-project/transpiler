@@ -225,7 +225,7 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 			typ := term.GetNew().GetType()
 			if typ.GetPrefab() != nil && len(typ.GetPrefab().Path) > 0 {
 				p := paths.NewFromTypePaths(typ.GetPrefab().Path)
-				e = ctxtMakeCall(*p)
+				e = ctxtMakeCall(p)
 			} else {
 				e = genericCtxtCall("make")
 			}
@@ -259,6 +259,25 @@ func (t Transformer) walkTerm(term *astpb.Term) *cctpb.Expression {
 				})
 
 			e.Value = &cctpb.Expression_FunctionCallExpression{fce}
+		}
+
+	case term.GetParentCall() != nil:
+		{
+			t.curScope().AddDefnHeader(t.supertypeInclude(t.curScope().CurProc))
+			pc := genericCtxtCall("DirectProc")
+			vsk.AddFuncArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), ctxtSrc())
+			parent := t.supertypeNamespace(t.curScope().CurProc)
+			vsk.AddFuncArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(),
+				vsk.IdExpr(vsk.NsId(parent, t.curScope().CurProc.Name)))
+			vsk.AddFuncArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(),
+				vsk.StringLiteralExpr(t.curScope().CurProc.Name))
+			// TODO: args
+			vsk.AddFuncInitListArg(pc.GetMemberAccessExpression().GetRhs().GetFunctionCallExpression(), []*cctpb.Expression{}...)
+			e.Value = &cctpb.Expression_CoYield{
+				&cctpb.CoYield{
+					Expression: pc,
+				},
+			}
 		}
 
 	default:
