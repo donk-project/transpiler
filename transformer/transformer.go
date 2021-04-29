@@ -350,15 +350,44 @@ func (t Transformer) passedAsArg(name string) bool {
 }
 
 func (t Transformer) supertypeNamespace(p *parser.DMProc) string {
-	if p.Type.Path.IsCoretype() {
-		return "donk::api::" + p.Type.Path.AsNamespace()
+	path := p.Type.Path
+	for !path.IsRoot() {
+		path = path.ParentPath()
+		typ, ok := t.parser.TypesByPath[path]
+		if ok {
+			for _, proc := range typ.Procs {
+				if proc.Name == p.Name {
+					if proc.Type.Path.IsCoretype() {
+						return "donk::api::" + proc.Type.Path.AsNamespace()
+					} else if proc.Type.Path.ParentPath().IsCoretype() {
+						return "donk::api::" + proc.Type.Path.ParentPath().AsNamespace()
+					}
+
+					return t.coreNamespace + "::" + proc.Type.ParentType().AsNamespace()
+				}
+			}
+		}
 	}
-	return t.coreNamespace + "::" + p.Type.ParentType().AsNamespace()
+	panic("cannot find parent proc")
 }
 
 func (t Transformer) supertypeInclude(p *parser.DMProc) string {
-	if p.Type.Path.IsCoretype() {
-		return "\"donk/api" + p.Type.Path.FullyQualifiedString() + ".h\""
+	path := p.Type.Path
+	for !path.IsRoot() {
+		path = path.ParentPath()
+		typ, ok := t.parser.TypesByPath[path]
+		if ok {
+			for _, proc := range typ.Procs {
+				if proc.Name == p.Name {
+					if proc.Type.Path.IsCoretype() {
+						return "\"donk/api" + proc.Type.Path.FullyQualifiedString() + ".h\""
+					} else if p.Type.Path.ParentPath().IsCoretype() {
+						return "\"donk/api" + proc.Type.Path.ParentPath().FullyQualifiedString() + ".h\""
+					}
+					return "\"" + strings.TrimLeft(proc.Type.Path.ParentPath().FullyQualifiedString(), "/") + ".h\""
+				}
+			}
+		}
 	}
-	return "\"" + strings.TrimLeft(p.Type.ParentType().FullyQualifiedString(), "/") + ".h\""
+	panic("cannot find parent proc")
 }

@@ -33,13 +33,32 @@ protobuf_deps()
 
 http_archive(
     name = "spacemandmm",
-    sha256 = "4a234d4a7aa483e007c342aa45fc24dd12a6060c640ab64e232402d1e70dc0c8",
-    strip_prefix = "SpacemanDMM-f7ff007973f5211e5491415357f133d27938973a",
-    urls = ["https://github.com/warriorstar-orion/SpacemanDMM/archive/f7ff007973f5211e5491415357f133d27938973a.tar.gz"],
+    sha256 = "1020982b221b5d45ab31924d75d9872b11e797c4359aa0dfc78e646fe99b620d",
+    strip_prefix = "SpacemanDMM-eb8a8c97ffb573b011c1efbb2aaf51141566da47",
+    urls = ["https://github.com/warriorstar-orion/SpacemanDMM/archive/eb8a8c97ffb573b011c1efbb2aaf51141566da47.tar.gz"],
 )
 
 http_archive(
     name = "vasker",
-    strip_prefix = "vasker-bd56f315090726a7fa4ad4f613eb3d4cfe740793",
-    urls = ["https://github.com/warriorstar-orion/vasker/archive/bd56f315090726a7fa4ad4f613eb3d4cfe740793.tar.gz"],
+    sha256 = "5bd7e41f1e76f4320dd8b5d4560811c04fb611f0c31f7695924558cf03ae906d",
+    strip_prefix = "vasker-8a18e402b602b702690d08621aef12bf1b384387",
+    urls = ["https://github.com/warriorstar-orion/vasker/archive/8a18e402b602b702690d08621aef12bf1b384387.tar.gz"],
 )
+
+http_archive(
+    name = "rules_rust",
+    sha256 = "accb5a89cbe63d55dcdae85938e56ff3aa56f21eb847ed826a28a83db8500ae6",
+    strip_prefix = "rules_rust-9aa49569b2b0dacecc51c05cee52708b7255bd98",
+    urls = [
+        # Main branch as of 2021-02-19
+        "https://github.com/bazelbuild/rules_rust/archive/9aa49569b2b0dacecc51c05cee52708b7255bd98.tar.gz",
+    ],
+)
+
+load("@rules_rust//rust:repositories.bzl", "rust_repositories")
+
+rust_repositories()
+
+load("@rules_rust//proto:repositories.bzl", "rust_proto_repositories")
+
+rust_proto_repositories()
